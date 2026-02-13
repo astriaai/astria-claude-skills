@@ -9,14 +9,20 @@ Packs are themed collections of prompt templates for generating consistent, prof
 
 Users upload reference images, then the pack's prompt templates generate images in the pack's theme using that reference.
 
-## How Packs Work
+## How Packs are used
 1. User selects a pack (e.g. "Corporate Headshots")
 2. User uploads reference images (shirt, shoes, dress, photos of themselves, product, pet, etc.)
 3. A reference is created
 4. The pack's prompt templates are automatically filled in with the reference
 5. Generated images appear automatically
 
-## Available Packs by Category
+
+## How to create packs
+1. Generate a few prompts with the same references (i.e: same man/woman or same shirt/shoes/dress) 
+2. Once the user is happy about them - add them to a pack with a clear name and description
+3. Once added - suggest navigation to the pack page /p/:pack-slug so the user can easily find it and use it again
+
+## Publicly Available Packs by Category
 Used for recommending users packs based on their needs and guiding them to the right pack for their use case.
 
 ### Fashion — Apparel
