@@ -113,6 +113,16 @@ Filters: text, base_pack_id, pack_id, user_id
 Can be used to find prompts tied to a specific reference just as a woman or clothing and get a sense of what the user has already generated with that reference.
 GET $ASTRIA_BASE_URL/tunes/:tune_id/prompts
 
+### Update prompt
+PATCH $ASTRIA_BASE_URL/tunes/:tune_id/prompts/:id
+
+Use this to assign a pack to a prompt, or switch workspace
+
+Parameters:
+- prompt[pack_id]
+- prompt[workspace_id]
+
+
 ### Delete prompt
 DELETE $ASTRIA_BASE_URL/tunes/:tune_id/prompts/:id
 
@@ -154,6 +164,16 @@ curl -s $ASTRIA_BASE_URL/packs \
   -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" \
   -H "X-Workspace-Id: $WORKSPACE_ID" | jq '.[].id, .[].title, .[].slug'
 
+### Create pack
+POST $ASTRIA_BASE_URL/packs
+Content-Type: application/json
+
+To assign prompts to a pack - make a PATCH /prompts/:id request with the pack_id field set to the pack ID.
+
+Parameters:
+- pack[title] 
+- pack[base_tune_id]=$GEMINI_TUNE_ID
+- pack[model_type]=faceid
 ---
 
 ## Error Handling

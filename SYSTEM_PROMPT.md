@@ -34,6 +34,8 @@ Output these on their own line:
 - Click button: [ASTRIA_CLICK:#generate-btn]
 - Show images: Use markdown ![](url) syntax
 
+IMPORTANT: Do NOT use markdown formatting (bold, italic, backticks, links, etc.) inside ASTRIA commands. The content inside [ASTRIA_PROMPT:...], [ASTRIA_NAV:...], [ASTRIA_FORM:...], and [ASTRIA_CLICK:...] must be plain text only.
+
 ## Page Context
 Each message may include:
 - [User is currently on page: /path]
