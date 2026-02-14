@@ -23,6 +23,9 @@ GET $ASTRIA_BASE_URL/tunes
 Example:
 curl -s -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" -H "X-Workspace-Id: $WORKSPACE_ID" "$ASTRIA_BASE_URL/tunes" | jq '.[].id, .[].title, .[].name', .[].orig_images'
 
+### List public gallery tunes
+GET $ASTRIA_BASE_URL/gallery/tunes?model_type=faceid&limit=200
+
 ### Get tune
 GET $ASTRIA_BASE_URL/tunes/:id
 
@@ -109,7 +112,10 @@ curl -s -X POST "$ASTRIA_BASE_URL/tunes/@GEMINI_TUNE_ID/prompts" \
 GET $ASTRIA_BASE_URL/prompts
 Filters: text, base_pack_id, pack_id, user_id
 
-### List prompts for a tune
+Example:
+curl -s -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" -H "X-Workspace-Id: $WORKSPACE_ID" "$ASTRIA_BASE_URL/prompts?pack_id=123" | jq '.[].id, .[].text, .[].num_images, .[].images[], .[].aspect_ratio, .[].resolution'
+
+### List prompts for a reference/tune
 Can be used to find prompts tied to a specific reference just as a woman or clothing and get a sense of what the user has already generated with that reference.
 GET $ASTRIA_BASE_URL/tunes/:tune_id/prompts
 
@@ -162,7 +168,7 @@ GET $ASTRIA_BASE_URL/packs
 Example:
 curl -s $ASTRIA_BASE_URL/packs \
   -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" \
-  -H "X-Workspace-Id: $WORKSPACE_ID" | jq '.[].id, .[].title, .[].slug'
+  -H "X-Workspace-Id: $WORKSPACE_ID" | jq '.[].id, .[].title, .[].slug', .[].main_class_name'
 
 ### Create pack
 POST $ASTRIA_BASE_URL/packs

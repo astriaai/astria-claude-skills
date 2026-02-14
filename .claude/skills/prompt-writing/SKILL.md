@@ -2,6 +2,10 @@
 description: Use when writing, improving, or debugging image generation prompts or choosing prompt parameters
 ---
 
+Before writing a prompt, get to know the user by querying his last few prompts using the astria-api skill, as well as retrieving his packs GET /packs, and finding prompts assigned to a relevant pack. For example: if trying to generate a prompt for a shirt, find a pack with main_class_name "shirt" and the find the relevant prompts using GET /prompts?pack_id={pack_id} to understand the style and parameters the user has been using. Use this info to inform your prompt writing and parameter suggestions.
+
+Before writing a prompt, query the user refereences/tunes using the astria-api get GET /tunes and see if any of them are relevant to the prompt they want to generate. If yes, use the tune.name and tune.id to reference the tune in the prompt via <model_type:tune.id:1> tune.name syntax. 
+
 After writing a prompt, present it to the user using [ASTRIA_PROMPT:...] so they can review and suggest changes before generating. Always ask how many images per prompt using AskUserQuestion before calling the API, and only call the generation API after the user confirms.
 
 # Prompt Writing Guide
@@ -26,9 +30,6 @@ For reference tune always use `tune.name <faceid:tune.id:1>` to reference the tr
 | prompt[resolution] | Output resolution | "1K", "2K" (default), "4K" |
 
 ## Tips for Better Results
-1. Be specific about lighting: "soft diffused studio lighting", "golden hour sunlight", "dramatic rim lighting"
-2. Specify camera angle: "shot from below", "bird's eye view", "close-up portrait"
-3. Describe clothing in detail for fashion shoots
 4. Include background descriptions: "clean white studio", "blurred urban street", "autumn forest"
 5. For product shots, describe the surface and arrangement
 

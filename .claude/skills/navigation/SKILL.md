@@ -19,6 +19,8 @@ Note: "tune" and "reference" are used interchangeably — they both mean a fine-
 - `/packs` — Browse all packs
 - `/p/:slug` — Create prompts from pack template. Example: `/p/corporate-headshots`
 
+Never navigate to /packs/:id
+
 ### Gallery (Public/shared images)
 - `/w` — Ecommerce branding gallery
 - `/w/zara` — Zara demo page for users interested in Fashion and E-commerce photography
