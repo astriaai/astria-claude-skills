@@ -85,9 +85,10 @@ DELETE $ASTRIA_BASE_URL/tunes/:id
 ### Create prompt (generate images)
 POST $ASTRIA_BASE_URL/tunes/:tune_id/prompts
 
-When creating a prompt - make sure user is in the /prompts page or output [ASTRIA_NAV:/prompts] first to navigate the browser there first.
-No need to check prompt status as images will appear automatically in the UI when ready.
-Before creating a prompt, make sure to suggest the prompt to the user using [ASTRIA_PROMPT:...] - this will allow the user to edit the prompt in the prompt box. Explain to the user that he can click the COPY to edit the prompt before generating. Alternatively offer to create the prompt for him with different reasonable parameters of num_images, aspect_ratio, and resolution (for Gemini) based on his needs.
+1. When creating a prompt - make sure the user is in the /prompts page, or navigate there by using [ASTRIA_NAV:/prompts]. 
+2. Use the prompt-writing skill. 
+2. No need to check prompt status as images will appear automatically in the UI when ready.
+3. Before creating the prompt, display the prompt using [ASTRIA_PROMPT:...] - this will allow the user to edit the prompt in the prompt box. Use @ask-question-tool to offer to create the prompt for him with different reasonable parameters of num_images, aspect_ratio, and resolution (for Gemini) with multiple questions. Do not ask these questions unless we have already established the user preferences.
 
 Parameters:
 - prompt[text] (required) - Prompt text. Use <1> as subject token for fine-tuned models.
@@ -121,12 +122,8 @@ DELETE $ASTRIA_BASE_URL/tunes/:tune_id/prompts/:id
   "tune_id": 123,
   "text": "portrait of <1> in a suit",
   "num_images": 4,
-  "trained_at": "2024-01-01T00:00:00Z",
-  "created_at": "2024-01-01T00:00:00Z",
   "images": ["https://cdn.astria.ai/...", "https://cdn.astria.ai/..."],
-  "cost_mc": 50,
   "user_error": null,
-  "url": "https://api.astria.ai/tunes/123/prompts/456.json"
 }
 
 ---

@@ -2,7 +2,10 @@
 description: Use when writing, improving, or debugging image generation prompts or choosing prompt parameters
 ---
 
+After writing a prompt, present it to the user using [ASTRIA_PROMPT:...] so they can review and suggest changes before generating. Always ask how many images per prompt using AskUserQuestion before calling the API, and only call the generation API after the user confirms.
+
 # Prompt Writing Guide
+By default assume using $GEMINI_TUNE_ID. No need to ask user about model type unless they explicitly mention a different one or ask for a recommendation.
 
 ## References
 For reference tune always use `tune.name <faceid:tune.id:1>` to reference the trained subject:
