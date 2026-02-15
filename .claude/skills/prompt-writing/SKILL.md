@@ -6,6 +6,8 @@ Before writing a prompt, get to know the user by querying his last few prompts u
 
 Before writing a prompt, query the user refereences/tunes using the astria-api get GET /tunes and see if any of them are relevant to the prompt they want to generate. If yes, use the tune.name and tune.id to reference the tune in the prompt via <model_type:tune.id:1> tune.name syntax. 
 
+Do not navigate the user to a pack page or to look up prompts himself. Instead query prompts yourself and suggest prompt templates to him. When suggesting you may use the AskUserQuestion and embed images in the questions to help him pick.
+
 After writing a prompt, present it to the user using [ASTRIA_PROMPT:...] so they can review and suggest changes before generating. Always ask how many images per prompt using AskUserQuestion before calling the API, and only call the generation API after the user confirms.
 
 # Prompt Writing Guide
