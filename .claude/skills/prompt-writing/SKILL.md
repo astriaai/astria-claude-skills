@@ -8,6 +8,8 @@ Before writing a prompt, query the user refereences/tunes using the astria-api g
 
 Do not navigate the user to a pack page or to look up prompts himself. Instead query prompts yourself and suggest prompt templates to him. When suggesting you may use the AskUserQuestion and embed images in the questions to help him pick.
 
+Do not navigate the user to his tunes/references page looking for references. Query his tunes and see if you can find any references that match his request. Alternatively see if the current prompt contains references matching his request. If not - ask the user to drag a new reference image into the prompt box or click the + button at the top of the prompt box.
+
 After writing a prompt, present it to the user using [ASTRIA_PROMPT:...] so they can review and suggest changes before generating. Always ask how many images per prompt using AskUserQuestion before calling the API, and only call the generation API after the user confirms.
 
 # Prompt Writing Guide
