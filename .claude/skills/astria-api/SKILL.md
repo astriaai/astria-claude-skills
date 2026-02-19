@@ -7,11 +7,18 @@ description: Use when making API calls to Astria for tunes, prompts, packs, or i
 API credentials are available as environment variables:
 - $ASTRIA_AUTH_TOKEN — Bearer token
 - $ASTRIA_BASE_URL — API base URL
-- $WORKSPACE_ID — Workspace ID (if set)
+- $WORKSPACE_ID — Default workspace ID (if set)
 - $GEMINI_TUNE_ID — Gemini tune ID
 - $SEEDREAM_TUNE_ID — Seedream tune ID
 
-Use these directly in curl commands. Always include both Authorization and X-Workspace-Id headers.
+Use these directly in curl commands.
+- Always include `Authorization`
+- Workspace header rules:
+  - Use `-H "X-Workspace-Id: $WORKSPACE_ID"` for the default workspace
+  - Use `-H "X-Workspace-Id: <workspace_id>"` to target a different workspace
+  - Use `-H "X-Workspace-Id: all"` for cross-workspace queries
+  - Omit `X-Workspace-Id` only when intentionally using personal/default scope without workspace context
+For better tool-call readability in chat logs, always include an explicit method with `-X` (for example, `-X GET`, `-X POST`) in Astria curl commands.
 
 ---
 

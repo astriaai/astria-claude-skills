@@ -1,27 +1,52 @@
 #!/usr/bin/env bash
 # Refresh local API cache for tunes, packs, and prompts.
 # Usage:
-#   refresh-cache.sh              # refresh all if stale (>24h)
-#   refresh-cache.sh --force      # refresh all regardless of age
-#   refresh-cache.sh tunes        # refresh only tunes.json
-#   refresh-cache.sh prompts      # refresh only prompts.json
-#   refresh-cache.sh packs        # refresh only packs.json
+#   refresh-cache.sh                        # refresh all if stale (>24h)
+#   refresh-cache.sh --force                # refresh all regardless of age
+#   refresh-cache.sh tunes                  # refresh only tunes.json
+#   refresh-cache.sh prompts                # refresh only prompts.json
+#   refresh-cache.sh packs                  # refresh only packs.json
+#   refresh-cache.sh --workspace 123        # refresh cache for workspace 123
+#   refresh-cache.sh --workspace all packs  # refresh packs cache across all workspaces
 
 set -euo pipefail
 
-DIR=".cache/ws_${WORKSPACE_ID:-personal}"
-mkdir -p "$DIR"
-REFRESHED_AT="$DIR/_refreshed_at"
 MAX_AGE=86400  # 24 hours
 
 FORCE=false
 RESOURCE=""
-for arg in "$@"; do
-  case "$arg" in
-    --force) FORCE=true ;;
-    tunes|prompts|packs) RESOURCE="$arg" ;;
+WORKSPACE_TARGET="${WORKSPACE_ID:-personal}"
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --force)
+      FORCE=true
+      shift
+      ;;
+    --workspace)
+      [ "$#" -lt 2 ] && echo "Missing value for --workspace" >&2 && exit 1
+      WORKSPACE_TARGET="$2"
+      shift 2
+      ;;
+    --workspace=*)
+      WORKSPACE_TARGET="${1#*=}"
+      shift
+      ;;
+    tunes|prompts|packs)
+      RESOURCE="$1"
+      shift
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
   esac
 done
+
+WORKSPACE_SLUG="$(echo "$WORKSPACE_TARGET" | tr -c '[:alnum:]_.-' '_')"
+DIR=".cache/ws_${WORKSPACE_SLUG}"
+mkdir -p "$DIR"
+REFRESHED_AT="$DIR/_refreshed_at"
 
 fetch() {
   local name="$1"
@@ -33,9 +58,14 @@ fetch() {
     *) jq_filter='.' ;;
   esac
 
-  curl -s -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" \
-       -H "X-Workspace-Id: ${WORKSPACE_ID:-}" \
-       "$ASTRIA_BASE_URL/$name" | jq "$jq_filter" > "$DIR/$name.json"
+  local curl_args=(
+    -s
+    -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN"
+  )
+
+  [ "$WORKSPACE_TARGET" != "personal" ] && curl_args+=(-H "X-Workspace-Id: $WORKSPACE_TARGET")
+
+  curl "${curl_args[@]}" "$ASTRIA_BASE_URL/$name" | jq "$jq_filter" > "$DIR/$name.json"
 }
 
 # Single-resource refresh (used after mutations)

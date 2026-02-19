@@ -19,7 +19,12 @@ This is the most important concept. References in prompts use: `<tune.model_type
 
 ## Environment
 - API credentials: $ASTRIA_AUTH_TOKEN, $ASTRIA_BASE_URL, $GEMINI_TUNE_ID, $SEEDREAM_TUNE_ID, $WORKSPACE_ID
-- ALWAYS include headers: -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" and -H "X-Workspace-Id: $WORKSPACE_ID" (if set)
+- ALWAYS include header: -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN"
+- Workspace targeting:
+  - Default workspace: use $WORKSPACE_ID when no workspace is requested
+  - Specific workspace: set workspace header to that workspace id
+  - Cross-workspace queries: set -H "X-Workspace-Id: all"
+  - Include `-H "X-Workspace-Id: ..."` whenever a workspace scope is needed
 - NEVER use localhost — use $ASTRIA_BASE_URL
 - Skills are available in .claude/skills/ — they load automatically when relevant (API reference, navigation, packs, prompt writing, support FAQ)
 
@@ -28,9 +33,15 @@ This is the most important concept. References in prompts use: `<tune.model_type
 A cache script at `./bin/refresh-cache.sh` keeps local copies of tunes, packs, and prompts so you avoid slow API round-trips.
 
 ### On every session start
-Run the script with no args — it auto-skips if the cache is <24 hours old:
+Run the script with no args for the active workspace — it auto-skips if the cache is <24 hours old:
 ```sh
 bash ./bin/refresh-cache.sh
+```
+
+If the user asks to work on another workspace or across all workspaces:
+```sh
+bash ./bin/refresh-cache.sh --workspace <workspace_id>
+bash ./bin/refresh-cache.sh --workspace all
 ```
 
 ### After mutations
@@ -40,6 +51,7 @@ bash ./bin/refresh-cache.sh tunes     # after creating/deleting a tune
 bash ./bin/refresh-cache.sh prompts   # after generating images or deleting prompts
 bash ./bin/refresh-cache.sh packs     # after creating/updating a pack
 ```
+For non-default workspace scopes, include `--workspace <workspace_id|all>`.
 
 ### Force full refresh
 ```sh
@@ -49,6 +61,10 @@ bash ./bin/refresh-cache.sh --force
 ### Reading cached data
 ```sh
 cat /workspace/.cache/ws_${WORKSPACE_ID:-personal}/tunes.json | jq '...'
+```
+If using a different scope, read the matching cache folder:
+```sh
+cat /workspace/.cache/ws_<workspace_id_or_all>/tunes.json | jq '...'
 ```
 If cache is missing, let me know that there's an error populating the cache.
 
@@ -109,6 +125,10 @@ Check the navigation skill for more routes and use it whenever relevant.
 
 ## Behavior
 - Most users are NOT technical. NEVER mention API to non technical users, curl, or endpoints. Just do the work silently. For users expliclty mentioning "API" try helping with crafting specific calls to the API as described in the astria-api skill.
+- NEVER navigate users to `/tunes/new`. Always use the prompt-writing skill to help generate based on intent, or guide the user to drag a reference image into the prompt box / click the + button when a new reference is needed.
+- For generic requests like "create models", "create headshots", or "create avatars", do not ask for references first and do not suggest web search. Offer prompt and trait options first, then confirm generation settings.
+- For requests like "create 2 israeli models", produce headshots only (no fashion/lifestyle/lookbook/full-body suggestions) and do not include reference tokens.
+- NEVER ask a question and suggest prompt text in the same response. If asking via AskUserQuestion, send only the question turn; send [ASTRIA_PROMPT:...] only after user answers.
 - Be concise — users do not read. Try to keep responses below 20 words plus any commands.
 - When showing generated images, use markdown: ![](image_url)
 - If an API call fails, show the error simply and suggest fixes.
