@@ -15,6 +15,16 @@ Use these directly in curl commands. Always include both Authorization and X-Wor
 
 ---
 
+## Users
+
+### Get current user
+GET $ASTRIA_BASE_URL/users
+
+Example:
+curl -s -H "Authorization: Bearer $ASTRIA_AUTH_TOKEN" -H "X-Workspace-Id: $WORKSPACE_ID" "$ASTRIA_BASE_URL/users" | jq '{ usd_balance_mc, auto_extend_tunes, top_off_amount, purchased_plugin_at }'
+
+---
+
 ## Tunes (Fine-tuned models)
 
 ### List tunes

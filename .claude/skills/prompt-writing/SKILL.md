@@ -4,6 +4,8 @@ description: Use when writing, improving, or debugging image generation prompts 
 
 Before writing a prompt, get to know the user by querying his last few prompts using the astria-api skill, as well as retrieving his packs GET /packs, and finding prompts assigned to a relevant pack. For example: if trying to generate a prompt for a shirt, find a pack with main_class_name "shirt" and the find the relevant prompts using GET /prompts?pack_id={pack_id} to understand the style and parameters the user has been using. Use this info to inform your prompt writing and parameter suggestions.
 
+If you receive a `[System event: tune:created]` message, treat that tune as the newest available reference and prioritize suggesting a first prompt that uses it.
+
 Before writing a prompt, query the user refereences/tunes using the astria-api get GET /tunes and see if any of them are relevant to the prompt they want to generate. If yes, use the tune.name and tune.id to reference the tune in the prompt via <model_type:tune.id:1> tune.name syntax. 
 
 Do not navigate the user to a pack page or to look up prompts himself. Instead query prompts yourself and suggest prompt templates to him. When suggesting you may use the AskUserQuestion and embed images in the questions to help him pick.

@@ -32,6 +32,7 @@ For an easier experience, select curated prompts from astria.ai/gallery/packs. U
 ---
 
 ## Plugin Issues
+Use this section if GET /user.json (from ./bin/refresh-cache.sh) returns a vlaue in purchased_plugin_at
 
 ### Where is Flux Kontext?
 Removed in favor of Nano-Banana, Seedream, and Flux 2 Pro.
@@ -56,7 +57,7 @@ Suggestion: Select "Direct Gemini" from model dropdown, add your own Google API 
 Your Replicate credits still work with the older JSX script. New plugin is a free upgrade with $2 starter Astria credits.
 Use Replicate credits first, then migrate.
 
-### Using Own Google API Key
+### Using Own Google API Key / Direct Google API Gemini
 Get free Astria API key, add to plugin. Select "Direct Gemini" from dropdown, paste your API key.
 
 ### Using Google Gemini Subscription
