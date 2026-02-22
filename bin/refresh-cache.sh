@@ -32,7 +32,7 @@ while [ "$#" -gt 0 ]; do
       WORKSPACE_TARGET="${1#*=}"
       shift
       ;;
-    tunes|prompts|packs)
+    tunes|prompts|packs|user)
       RESOURCE="$1"
       shift
       ;;
@@ -55,6 +55,7 @@ fetch() {
     tunes) jq_filter='map({ id, title, name, orig_images })' ;;
     prompts) jq_filter='map({ id, text, num_images, images, aspect_ratio, resolution, input_image, input_video })' ;;
     packs) jq_filter='map({ id, title, slug, main_class_name, multiplier, multiplier_api })' ;;
+    user) jq_filter='{ usd_balance_mc, email, name }' ;;
     *) jq_filter='.' ;;
   esac
 
@@ -65,7 +66,10 @@ fetch() {
 
   [ "$WORKSPACE_TARGET" != "personal" ] && curl_args+=(-H "X-Workspace-Id: $WORKSPACE_TARGET")
 
-  curl "${curl_args[@]}" "$ASTRIA_BASE_URL/$name" | jq "$jq_filter" > "$DIR/$name.json"
+  local endpoint="$name"
+  [ "$name" = "user" ] && endpoint="users"
+
+  curl "${curl_args[@]}" "$ASTRIA_BASE_URL/$endpoint" | jq "$jq_filter" > "$DIR/$name.json"
 }
 
 # Single-resource refresh (used after mutations)
@@ -88,5 +92,6 @@ fi
 fetch tunes &
 fetch packs &
 fetch prompts &
+fetch user &
 wait
 date +%s > "$REFRESHED_AT"

@@ -76,27 +76,6 @@ curl -s -X POST "$ASTRIA_BASE_URL/tunes" \
 PATCH $ASTRIA_BASE_URL/tunes/:id
 Parameters: tune[title], tune[name], tune[auto_extend], tune[characteristics]
 
-### Delete tune
-DELETE $ASTRIA_BASE_URL/tunes/:id
-
-### Tune JSON response fields:
-{
-  "id": 123,
-  "title": "My Model",
-  "name": "man",
-  "token": "ohwx",
-  "branch": "flux1",
-  "model_type": "lora",
-  "is_api": true,
-  "steps": 100,
-  "face_crop": false,
-  "base_tune_id": null,
-  "trained_at": "2024-01-01T00:00:00Z",
-  "created_at": "2024-01-01T00:00:00Z",
-  "cost_mc": 100,
-  "url": "https://api.astria.ai/tunes/123.json",
-  "orig_images": ["https://...", "https://..."]
-}
 
 ---
 
@@ -145,19 +124,6 @@ Parameters:
 - prompt[pack_id]
 - prompt[workspace_id]
 
-
-### Delete prompt
-DELETE $ASTRIA_BASE_URL/tunes/:tune_id/prompts/:id
-
-### Prompt JSON response fields:
-{
-  "id": 456,
-  "tune_id": 123,
-  "text": "portrait of <1> in a suit",
-  "num_images": 4,
-  "images": ["https://cdn.astria.ai/...", "https://cdn.astria.ai/..."],
-  "user_error": null,
-}
 
 ---
 
