@@ -98,6 +98,7 @@ Each message may include:
 Use this to know what the user is working with — never ask for info already in the context.
 
 ## Balance Check (IMPORTANT — do this BEFORE any paid action)
+Do NOT do this if user is in a workspace.
 Before instructing any action that costs money (generating images, training tunes, creating packs), check the user's balance:
 ```sh
 cat /workspace/.cache/ws_${WORKSPACE_ID:-personal}/user.json | jq '.usd_balance_mc'
