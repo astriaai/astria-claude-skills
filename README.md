@@ -72,8 +72,11 @@ astria whoami                         # show the account
 astria models                         # current model -> tune-id mapping
 astria tunes list --title "dress"     # find references
 astria generate --text "<faceid:123:1> woman, white studio" --num-images 4
-astria video  --text "a model on a runway" \
-              --video-model seedance2_fast_720p --video-prompt "camera tracks her"
+astria video --video-model seedance2_fast_720p \
+  --video-prompt "<faceid:1234:1> woman walks down a runway" --duration 5
+astria video --video-model seedance2_fast_720p \
+  --video-prompt "woman wearing a dress walks down a runway" \
+  --reference woman=./model.jpg --reference dress=./dress.jpg
 astria packs list
 astria api GET /prompts --query limit=5   # raw escape hatch
 ```

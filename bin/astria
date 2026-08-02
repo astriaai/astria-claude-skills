@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 
 def _platform_token():
@@ -835,12 +835,12 @@ def parse_reference_specs(values):
     specs = []
     for raw in values or []:
         if "=" not in raw:
-            die("invalid --images value: use NAME=PATH_OR_URL, e.g. --images woman=./model.jpg")
+            die("invalid --reference value: use NAME=PATH_OR_URL, e.g. --reference woman=./model.jpg")
         name, image = raw.split("=", 1)
         name = name.strip()
         image = image.strip()
         if not name or not image:
-            die("invalid --images value: both NAME and PATH_OR_URL are required")
+            die("invalid --reference value: both NAME and PATH_OR_URL are required")
         specs.append((name, image))
     return specs
 
@@ -859,8 +859,8 @@ def reference_title(name, image):
     return label or name
 
 
-def create_reference_tokens(args, cfg, tune_id, reference_specs):
-    tokens = []
+def create_reference_mentions(args, cfg, tune_id, reference_specs):
+    mentions = []
     for name, image in reference_specs:
         form = [
             field("tune[title]", reference_title(name, image)),
@@ -870,22 +870,22 @@ def create_reference_tokens(args, cfg, tune_id, reference_specs):
             reference_image_field(image),
         ]
         tune = request(cfg, "POST", "/tunes", form=form, workspace=args.workspace)
-        tokens.append(f"<faceid:{tune['id']}:1>")
-    return tokens
+        mentions.append(f"<faceid:{tune['id']}:1> {tune['name']}")
+    return mentions
 
 
-def prepend_reference_tokens(text, tokens):
+def prepend_reference_mentions(text, mentions):
     if text is None:
         return text
-    missing = [token for token in tokens if token not in text]
+    missing = [mention for mention in mentions if mention.split(" ", 1)[0] not in text]
     return f"{' '.join(missing)} {text}".strip() if missing else text
 
 
 def _generate(args, cfg, video):
-    reference_specs = parse_reference_specs(getattr(args, "images", None))
+    reference_specs = parse_reference_specs(getattr(args, "references", None))
     tune_id = resolve_model(cfg, args.model)
-    reference_tokens = create_reference_tokens(args, cfg, tune_id, reference_specs)
-    prompt_text = prepend_reference_tokens(args.text, reference_tokens)
+    reference_mentions = create_reference_mentions(args, cfg, tune_id, reference_specs)
+    prompt_text = prepend_reference_mentions(args.text, reference_mentions)
     form = []
     if prompt_text is not None:
         form.append(field("prompt[text]", prompt_text))
@@ -911,7 +911,7 @@ def _generate(args, cfg, video):
     if video:
         form.append(field("prompt[video_model]", args.video_model))
         form.append(field("prompt[video_prompt]",
-                          prepend_reference_tokens(args.video_prompt, reference_tokens)))
+                          prepend_reference_mentions(args.video_prompt, reference_mentions)))
         if args.duration:
             form.append(field("prompt[video_duration]", args.duration))
         for opt, prefix in (("first_frame", "prompt[video_first_frame]"),
@@ -943,7 +943,7 @@ def cmd_generate(args, cfg):
 
 def cmd_video(args, cfg):
     if getattr(args, "input_image", None):
-        die("--input-image is for image generation/editing. For video, use --first-frame, --last-frame, --input-video, or references via --images NAME=PATH_OR_URL.")
+        die("--input-image is for image generation/editing. For video, use --first-frame, --last-frame, --input-video, or --reference NAME=PATH_OR_URL.")
     _generate(args, cfg, video=True)
 
 
@@ -1610,7 +1610,7 @@ def build_parser():
         epilog=(
             "examples:\n"
             "  astria generate --model wan-2-7 --text \"plain white background\" \\\n"
-            "    --images \"dress=./dress.jpg\" --images \"woman=./woman.jpg\" --num-images 1 --wait"
+            "    --reference \"dress=./dress.jpg\" --reference \"woman=./woman.jpg\" --num-images 1 --wait"
         ),
     )
     p.add_argument("--model", default=None, help=image_model_help(models_record))
@@ -1622,8 +1622,8 @@ def build_parser():
     p.add_argument("--resolution", help=resolution_help(models_record))
     p.add_argument("--input-image", help="URL or local file to edit")
     p.add_argument("--mask-image", help="URL or local file to use as an inpainting mask")
-    p.add_argument("--images", action="append", metavar="NAME=PATH_OR_URL",
-                   help="Attach reference image. Name is the main subject class, for example: man, woman, shoes, outfit, shirt, background, style")
+    p.add_argument("--reference", "--images", dest="references", action="append", metavar="NAME=PATH_OR_URL",
+                   help="create and attach a reference; repeat for each NAME=PATH_OR_URL (--images is an alias)")
     p.add_argument("--pack-id", help="author the prompt as a pack template prompt")
     p.add_argument("--base-pack-id", help="bind as a pack one-off")
     p.add_argument("--wait", action="store_true", help="block until images are ready")
@@ -1634,25 +1634,35 @@ def build_parser():
         "video", parents=[ws_parent], help="generate video",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=(
+            "references use the same syntax as image prompts:\n"
+            "  <faceid:TUNE_ID:1> TUNE_NAME\n"
+            "The tune name must immediately follow its token. Put existing tune mentions in\n"
+            "--video-prompt. --reference NAME=PATH_OR_URL creates a new reference and adds\n"
+            "the correctly formatted mention to --text and --video-prompt automatically.\n\n"
             "examples:\n"
+            "  # Existing reference tune\n"
+            "  astria video --video-model seedance2_fast_720p \\\n"
+            "    --video-prompt \"<faceid:1234:1> woman walks down a runway\" --duration 5 --wait\n\n"
+            "  # Create and use references from local files or URLs\n"
             "  astria video --video-model seedance2_fast_480p \\\n"
             "    --video-prompt \"woman wearing dress, plain white background\" \\\n"
-            "    --images \"dress=./dress.jpg\" --images \"woman=./woman.jpg\" \\\n"
+            "    --reference \"dress=./dress.jpg\" --reference \"woman=./woman.jpg\" \\\n"
             "    --num-images 1 --wait"
         ),
     )
     p.add_argument("--model", default=None, help=image_model_help(models_record, "first-frame image model"))
     p.add_argument("--text", help="first-frame prompt text")
     p.add_argument("--video-model", required=True, help=video_model_help(models_record))
-    p.add_argument("--video-prompt", required=True, help="motion / action description")
+    p.add_argument("--video-prompt", required=True,
+                   help="motion / action description; references use <faceid:TUNE_ID:1> TUNE_NAME")
     p.add_argument("--duration", help="seconds (model-dependent)")
     p.add_argument("--aspect-ratio", default="3:4", help="e.g. 3:4, 1:1, 16:9 (default: %(default)s)")
     p.add_argument("--resolution", help=resolution_help(
         models_record, "first-frame image resolution (video resolution is set by --video-model)"))
     p.add_argument("--num-images", help="override config default_num_images; otherwise 2")
     p.add_argument("--input-image", help=argparse.SUPPRESS)
-    p.add_argument("--images", action="append", metavar="NAME=PATH_OR_URL",
-                   help="Attach reference image. Name is the main subject class, for example: man, woman, shoes, outfit, shirt, background, style")
+    p.add_argument("--reference", "--images", dest="references", action="append", metavar="NAME=PATH_OR_URL",
+                   help="create and attach a reference; repeat for each NAME=PATH_OR_URL (--images is an alias)")
     p.add_argument("--first-frame", help="URL or file overriding the rendered first frame")
     p.add_argument("--last-frame", help="URL or file for keyframe models")
     p.add_argument("--input-video", help="URL or file for motion-control models")
