@@ -1,6 +1,6 @@
 ---
 name: astria-api
-description: Use when making API calls to Astria for tunes, prompts, packs, or image/video generation (Gemini/Seedream). The reference for the `astria` CLI.
+description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), or estimating generation and pack pricing. The reference for the `astria` CLI.
 allowed-tools: Bash(astria:*)
 ---
 
@@ -245,9 +245,40 @@ Packs are surfaced in the Astria GUI as **Templates** — "pack" and "template" 
 
 ```bash
 astria packs list
+astria packs get spring-lookbook
 astria packs create --title "Spring Lookbook"
 astria prompts update 555 --model nano-banana-pro --pack-id 88   # add a prompt to the pack
 ```
+
+## Pricing
+
+`cost_mc` is an integer number of **millicents** (one thousandth of a US cent):
+
+- 1,000 `cost_mc` = $0.01
+- 100,000 `cost_mc` = $1.00
+- Convert to dollars with `cost_mc / 100_000`.
+
+A prompt's `cost_mc` already includes its `num_images`; never multiply by
+`num_images` again. Sum `cost_mc` across prompt records to price a prompt batch.
+For example, prompts priced at 12,500 and 25,000 `cost_mc` total 37,500
+millicents, or **$0.375**.
+
+Use `astria packs get <slug|id>` before running a pack:
+
+- `template_prompts[].cost_mc` is each stored template prompt's baseline. Sum
+  all entries for the full stored baseline, or selected entries for a
+  `--prompt-ids` subset.
+- `costs.<class>.cost_mc` estimates a fresh reference tune of that class plus
+  that class's prompt group. For multi-class packs it is not necessarily the
+  cost of the entire pack.
+
+These are estimates, not personalized quotes. Generated prompts recalculate
+cost after prompt overrides; creator discounts, the payer's ecommerce pricing,
+workspace rules, and Cartesian tune variants can change the result.
+
+After `astria packs run`, use `order.total_cost_mc` as the authoritative amount
+charged when an order is returned. If no order is returned, the generated
+prompts' `cost_mc` values describe their individual base costs.
 
 ### Run a pack
 

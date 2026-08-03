@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.12.0"
+VERSION = "1.13.0"
 
 
 def _platform_token():
@@ -761,7 +761,7 @@ def cmd_prompts_list(args, cfg):
         query.append(("offset", args.offset))
     path = f"/tunes/{args.tune_id}/prompts" if args.tune_id else "/prompts"
     prompts = request(cfg, "GET", path, query=query, workspace=args.workspace)
-    keys = ["id", "text", "num_images", "images", "aspect_ratio", "resolution", "pack_id", "tune_id", "order_id"]
+    keys = ["id", "text", "num_images", "cost_mc", "images", "aspect_ratio", "resolution", "pack_id", "tune_id", "order_id"]
     if args.expand:
         keys += ["debug_images", "debug_filenames", "debug_content_types"]
     emit([{k: p.get(k) for k in keys} for p in prompts])
@@ -957,7 +957,12 @@ def cmd_packs_list(args, cfg):
     if args.offset:
         query.append(("offset", args.offset))
     packs = request(cfg, "GET", "/packs", query=query, workspace=args.workspace)
-    emit([{k: p.get(k) for k in ("id", "title", "slug", "subtitle", "main_class_name")} for p in packs])
+    keys = ("id", "title", "slug", "subtitle", "main_class_name", "costs")
+    emit([{k: p.get(k) for k in keys} for p in packs])
+
+
+def cmd_packs_get(args, cfg):
+    emit(request(cfg, "GET", f"/p/{args.slug}.json", workspace=args.workspace))
 
 
 def cmd_packs_create(args, cfg):
@@ -1690,6 +1695,9 @@ def build_parser():
     p.add_argument("--limit")
     p.add_argument("--offset")
     p.set_defaults(func=cmd_packs_list)
+    p = packs.add_parser("get", parents=[ws_parent], help="get a pack and its template prompts")
+    p.add_argument("slug", help="pack slug or id")
+    p.set_defaults(func=cmd_packs_get)
     p = packs.add_parser("create", parents=[ws_parent], help="create a pack")
     p.add_argument("--title", required=True)
     p.add_argument("--subtitle")
