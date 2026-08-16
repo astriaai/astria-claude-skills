@@ -43,13 +43,21 @@ header or describe storyboard tiles.
 
 ## Apply it to the composer
 
+Choose the video model before calling `present_generation`:
+
+- Preserve an explicit video model already selected in the current draft.
+- Otherwise, reuse the Seedance 2.5 or Seedance 2 model and resolution established
+  by the user's prior videos.
+- If prior videos do not establish either default, ask the user to choose between
+  Seedance 2.5 and Seedance 2. Do not silently use the composer's global default.
+
 Call `present_generation` exactly once with the complete current generation
 draft. Put the completed sequence in `video_prompt`, set `text` to the empty
 string, and preserve the remaining fields from Current generation draft JSON.
-Use the current video model or its default when the draft has none. This writes
-the sequence directly to video mode with no image/first-frame prompt. Do not
-repeat the storyboard in assistant text and do not emit an `ASTRIA_PROMPT` or
-`ASTRIA_VIDEO_PROMPT` command.
+Set `video_model` to the explicit, established, or user-selected model from the
+rules above. This writes the sequence directly to video mode with no
+image/first-frame prompt. Do not repeat the storyboard in assistant text and do
+not emit an `ASTRIA_PROMPT` or `ASTRIA_VIDEO_PROMPT` command.
 
 If the current image prompt already contains the completed storyboard or the
 user asks to move the current prompt into video mode, copy it into the
@@ -68,7 +76,8 @@ as `--video-prompt` and omit `--text` entirely:
 - If `video_prompt` is already populated, use it as-is.
 
 ```bash
-astria video --video-model seedance2_720p --duration 15 --num-images 1 \
+astria video --video-model "<the chosen Seedance 2.5 or Seedance 2 model>" \
+  --duration 15 --num-images 1 \
   --video-prompt "<the exact approved storyboard>"
 ```
 
