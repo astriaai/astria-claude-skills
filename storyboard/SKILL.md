@@ -17,13 +17,20 @@ cinematic scene" as permission to make the missing creative choices when the
 draft already contains a reference, scene, and general idea of the frame. Do
 not ask the user to repeat those details.
 
-Preserve every `<lora:...>` and `<faceid:...>` token exactly. Keep the same
-character, products, wardrobe, location, time of day, lighting, and grade
+Discard every reference whose tune `name` is `pose`, including its complete
+`<lora:...> pose` or `<faceid:...> pose` mention. Never copy a `pose` tune into
+the storyboard or use its reference image for the video. This applies even when
+copying an otherwise completed prompt verbatim. Do not remove ordinary prose
+that describes a subject's pose, stance, or movement.
+
+Preserve every other `<lora:...>` and `<faceid:...>` token exactly. Keep the
+same character, products, wardrobe, location, time of day, lighting, and grade
 throughout the sequence unless the requested story deliberately changes one.
 
 ## Write the storyboard
 
-Default to 16 numbered shots for an approximately 15-second video:
+Default to 16 numbered shots for a 15-second video unless the user explicitly
+requests another supported duration:
 
 - Give each shot one camera scale, one subject, and one filmable action.
 - Do not repeat a camera scale twice in a row. Rotate among extreme close-up,
@@ -53,33 +60,43 @@ Choose the video model before calling `present_generation`:
 
 Call `present_generation` exactly once with the complete current generation
 draft. Put the completed sequence in `video_prompt`, set `text` to the empty
-string, and preserve the remaining fields from Current generation draft JSON.
-Set `video_model` to the explicit, established, or user-selected model from the
-rules above. This writes the sequence directly to video mode with no
-image/first-frame prompt. Do not repeat the storyboard in assistant text and do
-not emit an `ASTRIA_PROMPT` or `ASTRIA_VIDEO_PROMPT` command.
+string, discard all `pose` tune references, and preserve the remaining fields
+from Current generation draft JSON. Set `video_duration` to `15` unless the user
+explicitly requested another supported duration. Set `video_model` to the
+explicit, established, or user-selected model from the rules above. This writes
+the sequence directly to video mode with no image/first-frame prompt. Do not
+repeat the storyboard in assistant text and do not emit an `ASTRIA_PROMPT` or
+`ASTRIA_VIDEO_PROMPT` command.
 
 If the current image prompt already contains the completed storyboard or the
-user asks to move the current prompt into video mode, copy it into the
-`present_generation` `video_prompt` field verbatim and set `text` to the empty
-string. Do not summarize, prefix, trim, or rewrite it.
+user asks to move the current prompt into video mode, remove any `pose` tune
+reference, then copy everything else into the `present_generation`
+`video_prompt` field verbatim and set `text` to the empty string. Do not
+summarize, prefix, trim, or otherwise rewrite it.
 
 ## Generate video
 
-When the user explicitly asks to generate, pass the exact approved storyboard
-as `--video-prompt` and omit `--text` entirely:
+When the user explicitly asks to generate, pass the exact approved, pose-tune-
+free storyboard as `--video-prompt`, omit `--text` entirely, and default to a
+15-second duration unless the user explicitly requested another supported
+duration:
 
-- If `prompt.text` still contains the content and `video_prompt` is empty, move
-  `prompt.text` into `video_prompt` byte-for-byte and clear `prompt.text` before
-  generation. Do not expand, summarize, prefix, trim, or otherwise rewrite it
+- If `prompt.text` still contains the content and `video_prompt` is empty,
+  discard any `pose` tune reference, move the remaining `prompt.text` into
+  `video_prompt` byte-for-byte, and clear `prompt.text` before generation. Do
+  not expand, summarize, prefix, trim, or otherwise rewrite the remaining text
   during this generation step.
-- If `video_prompt` is already populated, use it as-is.
+- If `video_prompt` is already populated, discard any `pose` tune reference and
+  use the remaining text as-is.
 
 ```bash
 astria video --video-model "<the chosen Seedance 2.5 or Seedance 2 model>" \
   --duration 15 --num-images 1 \
   --video-prompt "<the exact approved storyboard>"
 ```
+
+Replace `15` only when the user explicitly requested another supported
+duration.
 
 Use the current aspect ratio when it is available. Do not create or pass an
 artboard image, an input image, or an image/first-frame prompt unless the user
