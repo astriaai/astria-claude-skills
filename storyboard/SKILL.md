@@ -12,7 +12,8 @@ first-frame image.
 ## Use the current draft
 
 Read the current image prompt, reference tokens, aspect ratio, and any existing
-video prompt from page context. Treat a handoff such as "Turn this into a
+video prompt from page context. Also read `image_reference_urls` as an ordered
+sequence of raw visual waypoints. Treat a handoff such as "Turn this into a
 cinematic scene" as permission to make the missing creative choices when the
 draft already contains a reference, scene, and general idea of the frame. Do
 not ask the user to repeat those details.
@@ -26,6 +27,8 @@ that describes a subject's pose, stance, or movement.
 Preserve every other `<lora:...>` and `<faceid:...>` token exactly. Keep the
 same character, products, wardrobe, location, time of day, lighting, and grade
 throughout the sequence unless the requested story deliberately changes one.
+Preserve every raw image reference exactly and in the same order. Do not turn
+raw references into tunes or embed their URLs in the storyboard text.
 
 ## Write the storyboard
 
@@ -44,6 +47,9 @@ requests another supported duration:
   them continuous.
 - Use the identical reference token whenever its subject appears. Chain
   continuity with phrases such as "the same woman", "she", and "her".
+- When ordered raw image references are present, make the action progress from
+  reference 1 through the final reference in order, describing filmable visual
+  transitions between them rather than treating them as unrelated examples.
 
 Write only the numbered shots in the finished video prompt. Do not add a grid
 header or describe storyboard tiles.
@@ -61,7 +67,8 @@ Choose the video model before calling `present_generation`:
 Call `present_generation` exactly once with the complete current generation
 draft. Put the completed sequence in `video_prompt`, set `text` to the empty
 string, discard all `pose` tune references, and preserve the remaining fields
-from Current generation draft JSON. Set `video_duration` to `15` unless the user
+from Current generation draft JSON, including the ordered
+`image_reference_urls` array. Set `video_duration` to `15` unless the user
 explicitly requested another supported duration. Set `video_model` to the
 explicit, established, or user-selected model from the rules above. This writes
 the sequence directly to video mode with no image/first-frame prompt. Do not
@@ -92,12 +99,18 @@ duration:
 ```bash
 astria video --video-model "<the chosen Seedance 2.5 or Seedance 2 model>" \
   --duration 15 --num-images 1 \
+  --image-reference "<reference 1>" --image-reference "<reference 2>" \
   --video-prompt "<the exact approved storyboard>"
 ```
+
+Include one `--image-reference` for every raw reference, in its original order.
+Omit those options when the draft has no raw image references. Use either all
+local paths or all URLs in a single command.
 
 Replace `15` only when the user explicitly requested another supported
 duration.
 
-Use the current aspect ratio when it is available. Do not create or pass an
-artboard image, an input image, or an image/first-frame prompt unless the user
-explicitly asks for one.
+Use the current aspect ratio when it is available. Raw `--image-reference`
+waypoints are not first-frame prompts. Do not create or pass an artboard image,
+an input image, or an image/first-frame prompt unless the user explicitly asks
+for one.

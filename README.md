@@ -60,7 +60,8 @@ needs nothing extra.
 | **navigation** | Astria app sitemap |
 | **landing-page-editor** | Edit a workspace's magazine-style landing page |
 | **templatize-page** | Turn a lookbook URL into a pose-swap pack |
-| **artboard** | Build a GPT Image 2 storyboard artboard — a 4x4 grid of 16 cinematic tiles for a ~15s video |
+| **storyboard** | Build a text-only cinematic video sequence from a draft or ordered image references |
+| **artboard** | Legacy alias for Storyboard |
 
 ## The `astria` CLI
 
@@ -77,6 +78,9 @@ astria video --video-model seedance2_fast_720p \
 astria video --video-model seedance2_fast_720p \
   --video-prompt "woman wearing a dress walks down a runway" \
   --reference woman=./model.jpg --reference dress=./dress.jpg
+astria video --video-model seedance2_fast_720p \
+  --video-prompt "transition through these looks in order" \
+  --image-reference ./look-1.jpg --image-reference ./look-2.jpg
 astria packs list
 astria api GET /prompts --query limit=5   # raw escape hatch
 ```

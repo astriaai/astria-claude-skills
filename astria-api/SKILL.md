@@ -165,6 +165,12 @@ astria video --video-model seedance2_fast_720p \
   --reference woman=./model.jpg --reference dress=https://example.com/dress.jpg \
   --duration 5 --aspect-ratio 16:9 --wait
 
+# Ordered raw references: attach the images directly without creating tunes.
+astria video --video-model seedance2_fast_720p \
+  --video-prompt "transition through these looks in order" \
+  --image-reference ./look-1.jpg --image-reference ./look-2.jpg \
+  --duration 15 --aspect-ratio 16:9 --wait
+
 astria video --text "zwx man <faceid:123:1> in a dance arena" \
   --video-model kling30_motion_control_pro --video-prompt "match the dance moves" \
   --duration 10 --input-video ./reference.mp4
@@ -178,6 +184,9 @@ astria video --text "zwx man <faceid:123:1> in a dance arena" \
 - `--reference NAME=PATH_OR_URL` creates an instant `faceid` reference and
   prepends `<faceid:NEW_ID:1> NAME` to both `--text` (when present) and
   `--video-prompt`. Repeat it for multiple references. `--images` is an alias.
+- `--image-reference PATH_OR_URL` attaches a raw image directly to the video
+  prompt without creating a tune. Repeat it in storyboard order. Use either
+  all local files or all URLs in one request so that ordering remains exact.
 - `--first-frame` / `--last-frame` / `--input-video` accept a URL or local file.
 - Motion-control models (`*_motion_control*`, `wan_animate_*`, `dreamactor_m2`,
   `happyhorse_motion_control`) require `--input-video`.
@@ -376,7 +385,9 @@ astria api PATCH /prompts/7001 --query view=board --data '{"prompt":{"pack_id":8
 astria api PATCH /prompts/7001 --query view=board --data '{"prompt":{"pack_id":null,"base_pack_id":88}}'
 ```
 
-Raw-image references: create an instant Gemini reference first (`astria tunes create --branch gemini ...`), then pass its id as `--tune-id`.
+For an ordered raw-image video, pass the selected images directly with repeated
+`astria video --image-reference PATH_OR_URL` options. Do not create temporary
+tunes for those images.
 
 ## Workspaces & landing pages
 
