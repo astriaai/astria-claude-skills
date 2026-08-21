@@ -1,6 +1,6 @@
 ---
 name: store-photoshoot
-description: Use when turning a brand's whole online store (Shopify or WooCommerce) into a reusable Astria AI photoshoot — crawl the catalog, extract the brand's DNA, cast avatars, and build packs that re-shoot the entire collection (and every future drop) in the brand's own look. Trigger phrases — "build a photoshoot from my store", "crawl <store-url> and make packs", "AI product photography for <brand>", "re-shoot our catalog". For a single lookbook/collection PAGE use `templatize-page` instead.
+description: Use when turning a brand's whole online store (Shopify or WooCommerce) into a reusable Astria AI photoshoot — crawl the catalog, extract the brand's DNA, cast avatars, and build packs that re-shoot the entire collection (and every future drop) in the brand's own look. Trigger phrases — "build a photoshoot from my store", "crawl STORE_URL and make packs", "AI product photography for BRAND", "re-shoot our catalog". For a single lookbook/collection PAGE use `templatize-page` instead.
 allowed-tools: Bash(astria:*), Bash(python3:*), Bash(curl:*), Read, Write, AskUserQuestion
 ---
 
