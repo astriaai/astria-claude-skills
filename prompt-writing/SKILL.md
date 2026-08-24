@@ -6,6 +6,10 @@ allowed-tools: Bash(astria:*)
 
 # Prompt Writing
 
+Always write generation prompt text in English, even when the user communicates
+in another language. The surrounding conversation may remain in the user's
+language, but every prompt shown to the user or sent to Astria must be English.
+
 Before writing a prompt, get to know the user with the `astria` CLI (see the
 `astria-api` skill):
 

@@ -9,6 +9,12 @@ Turn the current draft into a cinematic shot sequence written directly in the
 video prompt. Never generate a 4x4 artboard, storyboard image, contact sheet, or
 first-frame image.
 
+Always write the finished storyboard and all generation prompt text in English,
+even when the user communicates or supplies the draft in another language. The
+surrounding conversation may remain in the user's language. Translate
+non-English draft content into English while preserving its meaning and all
+reference tokens exactly.
+
 ## Use the current draft
 
 Read the current image prompt, reference tokens, aspect ratio, and any existing
@@ -77,9 +83,11 @@ repeat the storyboard in assistant text and do not emit an `ASTRIA_PROMPT` or
 
 If the current image prompt already contains the completed storyboard or the
 user asks to move the current prompt into video mode, remove any `pose` tune
-reference, then copy everything else into the `present_generation`
-`video_prompt` field verbatim and set `text` to the empty string. Do not
-summarize, prefix, trim, or otherwise rewrite it.
+reference, then put everything else into the `present_generation`
+`video_prompt` field and set `text` to the empty string. Preserve English
+content verbatim. If the content is not in English, translate it faithfully
+into English without summarizing, prefixing, trimming, or otherwise rewriting
+it beyond translation.
 
 ## Generate video
 
@@ -90,11 +98,13 @@ duration:
 
 - If `prompt.text` still contains the content and `video_prompt` is empty,
   discard any `pose` tune reference, move the remaining `prompt.text` into
-  `video_prompt` byte-for-byte, and clear `prompt.text` before generation. Do
-  not expand, summarize, prefix, trim, or otherwise rewrite the remaining text
-  during this generation step.
+  `video_prompt`, and clear `prompt.text` before generation. Preserve English
+  content byte-for-byte. Translate non-English content faithfully into English;
+  do not expand, summarize, prefix, trim, or otherwise rewrite it beyond
+  translation during this generation step.
 - If `video_prompt` is already populated, discard any `pose` tune reference and
-  use the remaining text as-is.
+  use English content as-is; translate non-English content faithfully into
+  English before generation.
 
 ```bash
 astria video --video-model "<the chosen Seedance 2.5 or Seedance 2 model>" \
