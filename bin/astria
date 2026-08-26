@@ -15,7 +15,10 @@ Only depends on Python 3 stdlib + `curl` (used for the actual HTTP).
 """
 import argparse
 import ast
+import base64
+import hashlib
 import json
+import mimetypes
 import os
 import platform
 import re
@@ -28,7 +31,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.15.0"
+VERSION = "1.16.0"
 
 
 def _platform_token():
@@ -415,12 +418,12 @@ def resolve_model(cfg, name):
 # HTTP — delegated to curl (handles multipart uploads, redirects, retries)
 # --------------------------------------------------------------------------
 def request(cfg, method, path, *, query=None, form=None, json_body=None, workspace=None,
-            no_workspace=False, auth=True):
+            no_workspace=False, auth=True, timeout=120):
     url = base_url(cfg) + path
     if query:
         url += ("&" if "?" in url else "?") + urlencode(query, doseq=True)
 
-    argv = ["curl", "-sS", "--retry", "2", "--max-time", "120", "-A", USER_AGENT, "-X", method,
+    argv = ["curl", "-sS", "--retry", "2", "--max-time", str(timeout), "-A", USER_AGENT, "-X", method,
             "-H", "Accept: application/json"]
     if auth:
         argv += ["-H", f"Authorization: Bearer {api_key(cfg)}"]
@@ -491,6 +494,62 @@ def media_field(prefix, value):
     if not Path(value).is_file():
         die(f"file not found: {value}")
     return field(prefix, f"@{value}")
+
+
+DIRECT_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
+CONTENT_TYPE_OVERRIDES = {
+    ".avif": "image/avif",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".mov": "video/quicktime",
+    ".webp": "image/webp",
+}
+
+
+def file_content_type(path):
+    return (CONTENT_TYPE_OVERRIDES.get(path.suffix.lower())
+            or mimetypes.guess_type(path.name)[0]
+            or "application/octet-stream")
+
+
+def file_md5(path):
+    digest = hashlib.md5()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return base64.b64encode(digest.digest()).decode("ascii")
+
+
+def direct_upload(cfg, value):
+    """Upload a local file straight to Active Storage and return its signed id."""
+    path = Path(value)
+    if not path.is_file():
+        die(f"file not found: {value}")
+    size = path.stat().st_size
+    if size > DIRECT_UPLOAD_MAX_BYTES:
+        die("file must be at most 100 MB")
+    content_type = file_content_type(path)
+    blob = request(cfg, "POST", "/api/direct_uploads", json_body={"blob": {
+        "filename": path.name,
+        "byte_size": size,
+        "checksum": file_md5(path),
+        "content_type": content_type,
+    }}, no_workspace=True)
+    upload = blob["direct_upload"]
+    argv = ["curl", "-sS", "--retry", "2", "--max-time", "600", "-X", "PUT"]
+    for key, header_value in upload["headers"].items():
+        argv += ["-H", f"{key}: {header_value}"]
+    argv += ["--data-binary", f"@{path}", "-w", "\n%{http_code}", upload["url"]]
+    try:
+        proc = subprocess.run(argv, capture_output=True)
+    except FileNotFoundError:
+        die("`curl` not found on PATH — install curl")
+    raw = proc.stdout.decode("utf-8", "replace")
+    _, _, status = raw.rpartition("\n")
+    if proc.returncode != 0 or not status.isdigit() or int(status) >= 400:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise AstriaError(f"direct upload failed: {detail or status or 'unexpected response'}")
+    return blob["signed_id"]
 
 
 def image_reference_fields(values):
@@ -740,9 +799,7 @@ def cmd_tunes_create(args, cfg):
     for url in args.image_url or []:
         form.append(field("tune[image_urls][]", url))
     for path in args.image or []:
-        if not Path(path).is_file():
-            die(f"file not found: {path}")
-        form.append(field("tune[images][]", f"@{path}"))
+        form.append(field("tune[images][]", direct_upload(cfg, path)))
     if not (args.image_url or args.image):
         die("provide at least one --image-url or --image")
     emit(request(cfg, "POST", "/tunes", form=form, workspace=args.workspace))
@@ -969,6 +1026,19 @@ def cmd_video(args, cfg):
     if getattr(args, "input_image", None):
         die("--input-image is for image generation/editing. For video, use --first-frame, --last-frame, --input-video, --image-reference, or --reference NAME=PATH_OR_URL.")
     _generate(args, cfg, video=True)
+
+
+def cmd_inspect_video(args, cfg):
+    if str(args.source).startswith(("http://", "https://")):
+        if not str(args.source).startswith("https://"):
+            die("video URL must use HTTPS")
+        payload = {"file_url": args.source}
+    else:
+        payload = {"blob_signed_id": direct_upload(cfg, args.source)}
+    if args.tune_id:
+        payload["tune_ids"] = [int(tune_id) for tune_id in args.tune_id]
+    emit(request(cfg, "POST", "/videos/inspect", json_body=payload,
+                 workspace=args.workspace, timeout=125))
 
 
 # --------------------------------------------------------------------------
@@ -1715,6 +1785,13 @@ def build_parser():
                        "generate a soundtrack; omit to use the model default"))
     p.add_argument("--wait", action="store_true")
     p.set_defaults(func=cmd_video)
+
+    p = sub.add_parser("inspect-video", parents=[ws_parent],
+                       help="describe a video as timestamped text-to-video prompt text")
+    p.add_argument("source", help="local video file or public HTTPS URL")
+    p.add_argument("--tune-id", action="append", metavar="ID",
+                   help="reference whose appearance should be removed from the description (repeatable)")
+    p.set_defaults(func=cmd_inspect_video)
 
     # download — pull a prompt's rendered images/videos to a local directory
     p = sub.add_parser("download", parents=[ws_parent],

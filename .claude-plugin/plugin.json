@@ -1,7 +1,7 @@
 {
   "name": "astria",
-  "description": "Generate images and video, manage references (tunes) and packs, and write prompts with the Astria API. Bundles the `astria` CLI so no environment variables are needed — run `astria login` once.",
-  "version": "1.4.2",
+  "description": "Generate and inspect images and video, manage references (tunes) and packs, and write prompts with the Astria API. Bundles the `astria` CLI so no environment variables are needed — run `astria login` once.",
+  "version": "1.4.3",
   "author": {
     "name": "Astria",
     "url": "https://www.astria.ai"

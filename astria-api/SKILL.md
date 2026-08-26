@@ -1,6 +1,6 @@
 ---
 name: astria-api
-description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), or estimating generation and pack pricing. The reference for the `astria` CLI.
+description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), inspecting videos as timestamped prompts, or estimating generation and pack pricing. The reference for the `astria` CLI.
 allowed-tools: Bash(astria:*)
 ---
 
@@ -224,6 +224,24 @@ models) and scale linearly with duration. `_audio` models include a soundtrack.
 | kling30_motion_control / _pro    |     277/370 | 10               |
 
 Video output is delivered in the prompt's `images[]` with `content_type=video/mp4`.
+
+## Inspect video
+
+Turn a local video or public HTTPS video URL into timestamped text-to-video
+prompt text. Local files are direct-uploaded to Astria automatically; do not
+upload them separately or build raw API requests.
+
+```bash
+astria inspect-video ./clip.mp4
+astria inspect-video https://example.com/clip.mp4
+astria inspect-video ./clip.mp4 --tune-id 123 --tune-id 456
+```
+
+The output uses one `SS-SS - description` line per cut for videos up to 30
+seconds. `--tune-id` is repeatable: use it when the resulting generation will
+carry those references, so inspection removes their appearance details and
+inserts the exact Astria reference tokens. There is intentionally no custom
+prompt option; use the returned `description` as the video prompt.
 
 ## Download
 
