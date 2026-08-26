@@ -126,12 +126,16 @@ astria prompts update 555 --model nano-banana-pro --base-pack-id 88   # bind as 
 astria generate --text "<faceid:123:1> woman, clean white studio background"
 astria generate --model nano-banana-pro --text "..." --num-images 4 --aspect-ratio 3:4 --resolution 2K
 astria generate --model seedream --text "product photo of headphones on marble" --num-images 2
+astria generate --text "cinematic portrait" --film-grain
 astria generate --text "recreate this in 4K" --input-image https://example.com/photo.jpg
 astria generate --text "<faceid:123:1> woman, white bg" --pack-id 88 --wait   # author a pack template prompt
 astria generate --text "..." --base-pack-id 88       # one-off bound to pack 88 — lands in its board frame
 ```
 
 - `--input-image` accepts a URL or a local file path (used for image editing/upscaling).
+- `--film-grain` sends film grain as a separate prompt attribute and leaves
+  `--text` unchanged. `--film_grain` is an alias; `--no-film-grain` explicitly
+  disables it.
 - `--pack-id` authors the prompt as a pack **template** prompt; `--base-pack-id`
   records pack provenance only (a one-off). On the board, `--base-pack-id`
   generations appear as free rows inside that pack's frame.
