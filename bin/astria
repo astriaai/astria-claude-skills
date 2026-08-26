@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.14.0"
+VERSION = "1.15.0"
 
 
 def _platform_token():
@@ -914,6 +914,9 @@ def _generate(args, cfg, video):
     form.append(field("prompt[num_images]", num_images))
     if getattr(args, "seed", None):
         form.append(field("prompt[seed]", args.seed))
+    if getattr(args, "film_grain", None) is not None:
+        form.append(field("prompt[film_grain]",
+                          "true" if args.film_grain else "false"))
     if args.aspect_ratio:
         form.append(field("prompt[aspect_ratio]", args.aspect_ratio))
     if getattr(args, "resolution", None):
@@ -1644,6 +1647,9 @@ def build_parser():
     p.add_argument("--video-prompt", help=argparse.SUPPRESS)
     p.add_argument("--num-images", help="override config default_num_images; otherwise 2, or 1 with --input-image")
     p.add_argument("--seed", help="generation seed; also makes an otherwise-identical prompt distinct")
+    p.add_argument("--film-grain", "--film_grain", action=argparse.BooleanOptionalAction, default=None,
+                   help="enable film-grain post-processing as a separate prompt attribute; "
+                        "--film_grain is an alias")
     p.add_argument("--aspect-ratio", default="3:4", help="e.g. 3:4, 1:1, 16:9 (default: %(default)s)")
     p.add_argument("--resolution", help=resolution_help(models_record))
     p.add_argument("--input-image", help="URL or local file to edit")
