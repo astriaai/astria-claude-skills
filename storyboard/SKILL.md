@@ -34,7 +34,10 @@ Preserve every other `<lora:...>` and `<faceid:...>` token exactly. Keep the
 same character, products, wardrobe, location, time of day, lighting, and grade
 throughout the sequence unless the requested story deliberately changes one.
 Preserve every raw image reference exactly and in the same order. Do not turn
-raw references into tunes or embed their URLs in the storyboard text.
+raw references into tunes or embed their URLs in the storyboard text. A raw
+reference may be a public HTTP(S) URL or an absolute `/workspace/...` path from
+an attached file; keep either form unchanged and never rewrite a workspace path
+as `file://` or invent a public URL for it.
 
 ## Write the storyboard
 
