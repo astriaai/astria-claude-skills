@@ -1,6 +1,6 @@
 ---
 name: astria-api
-description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), inspecting videos as timestamped prompts, or estimating generation and pack pricing. The reference for the `astria` CLI.
+description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), inspecting or variating videos, or estimating generation and pack pricing. The reference for the `astria` CLI.
 allowed-tools: Bash(astria:*)
 ---
 
@@ -242,6 +242,45 @@ seconds. `--tune-id` is repeatable: use it when the resulting generation will
 carry those references, so inspection removes their appearance details and
 inserts the exact Astria reference tokens. There is intentionally no custom
 prompt option; use the returned `description` as the video prompt.
+
+## Variate video
+
+Use `astria variate` when the user wants to preserve a source video's timing,
+performance, camera, transitions, and audio while changing its content. The
+command runs the Variate mini-app workflow end to end: source inspection,
+replacement-reference creation, structured prompt writing, and fixed-model
+Seedance 2.5 generation.
+
+```bash
+# Edit from a written brief
+astria variate ./source.mp4 \
+  --brief 'Change the text on the final card to say "Astria"' --wait
+
+# Mix existing references with new local or remote images
+astria variate ./source.mp4 \
+  --tune-id 123 \
+  --reference ./dress.jpg \
+  --reference woman=https://example.com/model.jpg \
+  --brief 'Replace the presenter and wardrobe' --wait
+
+# Reuse an existing source description and avoid another inspection charge
+astria variate https://example.com/source.mp4 \
+  --description-file ./source-description.txt \
+  --brief 'Use a warmer end-card treatment'
+```
+
+- `SOURCE` is a local MP4/MOV or public HTTPS URL.
+- Repeat `--tune-id ID` for existing replacement references.
+- Repeat `--reference [NAME=]PATH_OR_URL` to create replacement references.
+  Without `NAME=`, the CLI detects the image class. With it, detection is
+  skipped. References preserve command order within the existing/new groups.
+- At least one reference or a non-empty `--brief` is required.
+- `--description` / `--description-file` bypass source inspection.
+- The command intentionally fixes `video_model=seedance25_720p`, enables
+  generated audio, and omits duration/aspect ratio so the source drives them.
+- Local source and reference files are direct-uploaded in one parallel batch.
+- The JSON result contains `description`, `references`, `video_prompt`, and
+  `prompt`; add `--wait` to receive the settled generation in `prompt`.
 
 ## Download
 

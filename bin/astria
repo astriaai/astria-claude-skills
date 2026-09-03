@@ -16,6 +16,7 @@ Only depends on Python 3 stdlib + `curl` (used for the actual HTTP).
 import argparse
 import ast
 import base64
+import concurrent.futures
 import hashlib
 import json
 import mimetypes
@@ -31,7 +32,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.16.0"
+VERSION = "1.18.0"
 
 
 def _platform_token():
@@ -415,7 +416,7 @@ def resolve_model(cfg, name):
 
 
 # --------------------------------------------------------------------------
-# HTTP — delegated to curl (handles multipart uploads, redirects, retries)
+# HTTP — delegated to curl (handles redirects and retries)
 # --------------------------------------------------------------------------
 def request(cfg, method, path, *, query=None, form=None, json_body=None, workspace=None,
             no_workspace=False, auth=True, timeout=120):
@@ -438,9 +439,7 @@ def request(cfg, method, path, *, query=None, form=None, json_body=None, workspa
         argv += ["-H", "Content-Type: application/json", "--data-binary", "@-"]
         stdin = json.dumps(json_body).encode()
     for key, value in (form or []):
-        value = str(value)
-        argv += (["-F", f"{key}={value}"] if value.startswith("@")
-                 else ["--form-string", f"{key}={value}"])
+        argv += ["--form-string", f"{key}={value}"]
 
     argv += ["-w", "\n%{http_code}", url]
 
@@ -479,24 +478,27 @@ def request(cfg, method, path, *, query=None, form=None, json_body=None, workspa
 
 
 def field(key, value):
-    """A multipart field; for files pass a path and it is sent with curl's @ prefix."""
+    """A form field. Local attachments are represented by direct-upload signed ids."""
     return (key, value)
 
 
-def media_field(prefix, value):
-    """Resolve an image/video argument to the right form field: URL vs local file.
+def remote_url(value):
+    return str(value).startswith(("http://", "https://"))
+
+
+def media_field(prefix, value, resolved):
+    """Resolve an image/video argument to the right form field: URL vs signed id.
 
     A URL goes in the `_url` variant of the field, with the suffix inserted
     inside the param brackets — `prompt[input_image]` -> `prompt[input_image_url]`."""
-    if str(value).startswith(("http://", "https://")):
+    if remote_url(value):
         url_key = f"{prefix[:-1]}_url]" if prefix.endswith("]") else f"{prefix}_url"
         return field(url_key, value)
-    if not Path(value).is_file():
-        die(f"file not found: {value}")
-    return field(prefix, f"@{value}")
+    return field(prefix, resolved)
 
 
 DIRECT_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
+DIRECT_UPLOAD_WORKERS = 6
 CONTENT_TYPE_OVERRIDES = {
     ".avif": "image/avif",
     ".heic": "image/heic",
@@ -504,6 +506,7 @@ CONTENT_TYPE_OVERRIDES = {
     ".mov": "video/quicktime",
     ".webp": "image/webp",
 }
+DIRECT_UPLOAD_CONTENT_TYPE_PREFIXES = ("image/", "video/", "audio/")
 
 
 def file_content_type(path):
@@ -521,14 +524,25 @@ def file_md5(path):
 
 
 def direct_upload(cfg, value):
-    """Upload a local file straight to Active Storage and return its signed id."""
+    """Upload one local file straight to Active Storage and return its signed id."""
+    return direct_uploads(cfg, [value])[0]
+
+
+def prepare_direct_upload(value):
     path = Path(value)
     if not path.is_file():
         die(f"file not found: {value}")
     size = path.stat().st_size
     if size > DIRECT_UPLOAD_MAX_BYTES:
-        die("file must be at most 100 MB")
+        die(f"file must be at most 100 MB: {value}")
     content_type = file_content_type(path)
+    if content_type != "text/plain" and not content_type.startswith(DIRECT_UPLOAD_CONTENT_TYPE_PREFIXES):
+        die(f"unsupported upload content type {content_type}: {value}")
+    return path, size, content_type
+
+
+def perform_direct_upload_record(cfg, prepared):
+    path, size, content_type = prepared
     blob = request(cfg, "POST", "/api/direct_uploads", json_body={"blob": {
         "filename": path.name,
         "byte_size": size,
@@ -545,30 +559,57 @@ def direct_upload(cfg, value):
     except FileNotFoundError:
         die("`curl` not found on PATH — install curl")
     raw = proc.stdout.decode("utf-8", "replace")
-    _, _, status = raw.rpartition("\n")
+    body, _, status = raw.rpartition("\n")
     if proc.returncode != 0 or not status.isdigit() or int(status) >= 400:
-        detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise AstriaError(f"direct upload failed: {detail or status or 'unexpected response'}")
-    return blob["signed_id"]
+        detail = proc.stderr.decode("utf-8", "replace").strip() or body.strip()[:400]
+        raise AstriaError(f"direct upload failed for {path}: {detail or status or 'unexpected response'}")
+    return blob
 
 
-def image_reference_fields(values):
+def perform_direct_upload(cfg, prepared):
+    return perform_direct_upload_record(cfg, prepared)["signed_id"]
+
+
+def parallel_direct_upload(cfg, values, upload):
+    prepared = [prepare_direct_upload(value) for value in values]
+    if not prepared:
+        return []
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(DIRECT_UPLOAD_WORKERS, len(prepared))) as executor:
+        return list(executor.map(lambda item: upload(cfg, item), prepared))
+
+
+def direct_uploads(cfg, values):
+    """Direct-upload local files in parallel and return signed ids in input order."""
+    return parallel_direct_upload(cfg, values, perform_direct_upload)
+
+
+def direct_upload_records(cfg, values):
+    """Direct-upload local files in parallel and retain signed ids + public URLs."""
+    return parallel_direct_upload(cfg, values, perform_direct_upload_record)
+
+
+def resolve_media_values(cfg, values):
+    """Replace local paths with signed ids while leaving remote URLs untouched."""
+    uploads = iter(direct_uploads(cfg, [value for value in values if not remote_url(value)]))
+    return [value if remote_url(value) else next(uploads) for value in values]
+
+
+def image_reference_fields(values, resolved_values):
     values = values or []
     source_kinds = {
-        "url" if str(value).startswith(("http://", "https://")) else "file"
+        "url" if remote_url(value) else "file"
         for value in values
     }
     if len(source_kinds) > 1:
         die("--image-reference cannot mix URLs and local files in one request")
 
     fields = []
-    for value in values:
+    for value, resolved in zip(values, resolved_values):
         if source_kinds == {"url"}:
             fields.append(field("prompt[image_reference_urls][]", value))
             continue
-        if not Path(value).is_file():
-            die(f"image reference file not found: {value}")
-        fields.append(field("prompt[image_references][]", f"@{value}"))
+        fields.append(field("prompt[image_references][]", resolved))
     return fields
 
 
@@ -798,8 +839,8 @@ def cmd_tunes_create(args, cfg):
         form.append(field("tune[characteristics]", json.dumps({"short_description": args.description})))
     for url in args.image_url or []:
         form.append(field("tune[image_urls][]", url))
-    for path in args.image or []:
-        form.append(field("tune[images][]", direct_upload(cfg, path)))
+    for signed_id in direct_uploads(cfg, args.image or []):
+        form.append(field("tune[images][]", signed_id))
     if not (args.image_url or args.image):
         die("provide at least one --image-url or --image")
     emit(request(cfg, "POST", "/tunes", form=form, workspace=args.workspace))
@@ -922,12 +963,10 @@ def parse_reference_specs(values):
     return specs
 
 
-def reference_image_field(value):
-    if str(value).startswith(("http://", "https://")):
+def reference_image_field(value, resolved):
+    if remote_url(value):
         return field("tune[image_urls][]", value)
-    if not Path(value).is_file():
-        die(f"file not found: {value}")
-    return field("tune[images][]", f"@{value}")
+    return field("tune[images][]", resolved)
 
 
 def reference_title(name, image):
@@ -936,15 +975,15 @@ def reference_title(name, image):
     return label or name
 
 
-def create_reference_mentions(args, cfg, tune_id, reference_specs):
+def create_reference_mentions(args, cfg, tune_id, reference_specs, resolved_images):
     mentions = []
-    for name, image in reference_specs:
+    for (name, image), resolved in zip(reference_specs, resolved_images):
         form = [
             field("tune[title]", reference_title(name, image)),
             field("tune[name]", name),
             field("tune[model_type]", "faceid"),
             field("tune[base_tune_id]", tune_id),
-            reference_image_field(image),
+            reference_image_field(image, resolved),
         ]
         tune = request(cfg, "POST", "/tunes", form=form, workspace=args.workspace)
         mentions.append(f"<faceid:{tune['id']}:1> {tune['name']}")
@@ -961,7 +1000,45 @@ def prepend_reference_mentions(text, mentions):
 def _generate(args, cfg, video):
     reference_specs = parse_reference_specs(getattr(args, "references", None))
     tune_id = resolve_model(cfg, args.model)
-    reference_mentions = create_reference_mentions(args, cfg, tune_id, reference_specs)
+    prompt_media = [
+        ("prompt[input_image]", getattr(args, "input_image", None)),
+        ("prompt[mask_image]", getattr(args, "mask_image", None)),
+    ]
+    prompt_media = [(prefix, value) for prefix, value in prompt_media if value]
+    image_references = args.image_references or [] if video else []
+    source_kinds = {"url" if remote_url(value) else "file" for value in image_references}
+    if len(source_kinds) > 1:
+        die("--image-reference cannot mix URLs and local files in one request")
+    video_media = []
+    if video:
+        video_media = [
+            ("prompt[video_first_frame]", args.first_frame),
+            ("prompt[video_last_frame]", args.last_frame),
+            ("prompt[input_video]", args.input_video),
+            ("prompt[audio_reference]", args.audio_reference),
+        ]
+        video_media = [(prefix, value) for prefix, value in video_media if value]
+
+    reference_images = [image for _, image in reference_specs]
+    media_values = (
+        reference_images
+        + [value for _, value in prompt_media]
+        + image_references
+        + [value for _, value in video_media]
+    )
+    resolved_media = resolve_media_values(cfg, media_values)
+    cursor = 0
+    resolved_reference_images = resolved_media[cursor:cursor + len(reference_images)]
+    cursor += len(reference_images)
+    resolved_prompt_media = resolved_media[cursor:cursor + len(prompt_media)]
+    cursor += len(prompt_media)
+    resolved_image_references = resolved_media[cursor:cursor + len(image_references)]
+    cursor += len(image_references)
+    resolved_video_media = resolved_media[cursor:cursor + len(video_media)]
+
+    reference_mentions = create_reference_mentions(
+        args, cfg, tune_id, reference_specs, resolved_reference_images,
+    )
     prompt_text = prepend_reference_mentions(args.text, reference_mentions)
     form = []
     if prompt_text is not None:
@@ -978,12 +1055,8 @@ def _generate(args, cfg, video):
         form.append(field("prompt[aspect_ratio]", args.aspect_ratio))
     if getattr(args, "resolution", None):
         form.append(field("prompt[resolution]", args.resolution))
-    if getattr(args, "input_image", None):
-        key, value = media_field("prompt[input_image]", args.input_image)
-        form.append(field(key, value))
-    if getattr(args, "mask_image", None):
-        key, value = media_field("prompt[mask_image]", args.mask_image)
-        form.append(field(key, value))
+    for (prefix, value), resolved in zip(prompt_media, resolved_prompt_media):
+        form.append(media_field(prefix, value, resolved))
     if getattr(args, "pack_id", None):
         form.append(field("prompt[pack_id]", args.pack_id))
     if getattr(args, "base_pack_id", None):
@@ -992,17 +1065,11 @@ def _generate(args, cfg, video):
         form.append(field("prompt[video_model]", args.video_model))
         form.append(field("prompt[video_prompt]",
                           prepend_reference_mentions(args.video_prompt, reference_mentions)))
-        form.extend(image_reference_fields(args.image_references))
+        form.extend(image_reference_fields(image_references, resolved_image_references))
         if args.duration:
             form.append(field("prompt[video_duration]", args.duration))
-        for opt, prefix in (("first_frame", "prompt[video_first_frame]"),
-                            ("last_frame", "prompt[video_last_frame]"),
-                            ("input_video", "prompt[input_video]"),
-                            ("audio_reference", "prompt[audio_reference]")):
-            value = getattr(args, opt, None)
-            if value:
-                key, resolved = media_field(prefix, value)
-                form.append(field(key, resolved))
+        for (prefix, value), resolved in zip(video_media, resolved_video_media):
+            form.append(media_field(prefix, value, resolved))
         if args.generate_audio is not None:
             form.append(field("prompt[generate_audio]",
                                "true" if args.generate_audio else "false"))
@@ -1026,6 +1093,236 @@ def cmd_video(args, cfg):
     if getattr(args, "input_image", None):
         die("--input-image is for image generation/editing. For video, use --first-frame, --last-frame, --input-video, --image-reference, or --reference NAME=PATH_OR_URL.")
     _generate(args, cfg, video=True)
+
+
+VARIATE_VIDEO_MODEL = "seedance25_720p"
+VARIATE_PROMPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "video_prompt": {"type": "string"},
+    },
+    "required": ["video_prompt"],
+    "additionalProperties": False,
+}
+VARIATE_SYSTEM_MESSAGE = (
+    "Write one production-ready Seedance 2.5 video-to-video edit prompt. "
+    "Use the source video description as factual timing, action, staging, camera, lighting, "
+    "transitions, and audio context. Apply the edit brief without inventing changes it does not request. "
+    "When replacement reference tokens are supplied, include every token exactly once and state clearly "
+    "what each replaces. Do not mention the source description, brief, these instructions, or analysis. "
+    "Return only the requested JSON."
+)
+
+
+def parse_variate_reference_specs(values):
+    specs = []
+    for raw in values or []:
+        name = None
+        source = raw.strip()
+        if "=" in source:
+            candidate, separator, remainder = source.partition("=")
+            if (separator and candidate.strip() and remainder.strip()
+                    and not remote_url(candidate.strip())
+                    and "/" not in candidate and "\\" not in candidate):
+                name = candidate.strip()
+                source = remainder.strip()
+        if not source:
+            die("invalid --reference value: PATH_OR_URL cannot be empty")
+        specs.append({"name": name, "source": source})
+    return specs
+
+
+def variate_reference_title(name, source, class_info):
+    parsed = urlparse(str(source))
+    filename = Path(parsed.path).name if parsed.scheme else Path(source).name
+    stem = Path(filename).stem
+    return (class_info.get("first_name") or class_info.get("short_description")
+            or stem or name or class_info.get("class_name") or "image")
+
+
+def create_variate_reference(args, cfg, default_tune_id, spec, upload_record):
+    source = spec["source"]
+    class_info = {}
+    if not spec["name"]:
+        class_info = request(
+            cfg,
+            "POST",
+            "/images/class_name",
+            form=[field("file_url", source if remote_url(source) else upload_record["public_url"])],
+            workspace=args.workspace,
+        )
+    name = spec["name"] or class_info.get("class_name") or "image"
+    characteristics = {
+        key: value
+        for key, value in class_info.items()
+        if key not in ("class_name", "captions")
+    }
+    form = [
+        field("tune[title]", variate_reference_title(name, source, class_info)),
+        field("tune[name]", name),
+    ]
+    if characteristics.get("short_description"):
+        form.append(field("tune[characteristics]", json.dumps(characteristics)))
+    form += [
+        field("tune[model_type]", "faceid"),
+        field("tune[base_tune_id]", default_tune_id),
+        reference_image_field(source, source if remote_url(source) else upload_record["signed_id"]),
+        field("tune[image_captions][]", class_info.get("caption", "")),
+    ]
+    tune = request(cfg, "POST", "/tunes", form=form, workspace=args.workspace)
+    return {
+        "id": tune["id"],
+        "name": tune["name"],
+        "title": tune.get("title") or variate_reference_title(name, source, class_info),
+        "source": source,
+        "created": True,
+    }
+
+
+def variate_prompt_messages(description, brief, references):
+    tokens = [f"<faceid:{reference['id']}:1>" for reference in references]
+    reference_tokens = "\n".join(tokens) or "(none)"
+    return [
+        {"role": "system", "content": VARIATE_SYSTEM_MESSAGE},
+        {
+            "role": "user",
+            "content": "\n\n".join([
+                f"Source video description:\n{description.strip()}",
+                f"Edit brief:\n{brief.strip() or '(none)'}",
+                f"Replacement reference tokens:\n{reference_tokens}",
+            ]),
+        },
+    ]
+
+
+def compose_variate_video_prompt(args, cfg, description, references):
+    response = request(
+        cfg,
+        "POST",
+        "/assist/complete",
+        json_body={
+            "messages": variate_prompt_messages(description, args.brief, references),
+            "response_schema": VARIATE_PROMPT_SCHEMA,
+        },
+        workspace=args.workspace,
+        timeout=30,
+    )
+    try:
+        video_prompt = json.loads(response["text"])["video_prompt"].strip()
+    except (KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise AstriaError("the Variate prompt writer returned invalid JSON") from exc
+    if not video_prompt:
+        raise AstriaError("the Variate prompt writer returned an empty video prompt")
+    missing_tokens = [
+        f"<faceid:{reference['id']}:1>"
+        for reference in references
+        if f"<faceid:{reference['id']}:1>" not in video_prompt
+    ]
+    return (f"Replace objects in the scene with {' '.join(missing_tokens)}. {video_prompt}"
+            if missing_tokens else video_prompt)
+
+
+def variate_description(args, cfg, source_payload):
+    if args.description is not None:
+        description = args.description.strip()
+    elif args.description_file:
+        path = Path(args.description_file)
+        if not path.is_file():
+            die(f"file not found: {args.description_file}")
+        description = path.read_text(encoding="utf-8").strip()
+    else:
+        inspected = request(
+            cfg,
+            "POST",
+            "/videos/inspect",
+            json_body=source_payload,
+            workspace=args.workspace,
+            timeout=125,
+        )
+        description = inspected["description"].strip()
+    if not description:
+        die("video description cannot be empty")
+    return description
+
+
+def cmd_variate(args, cfg):
+    if remote_url(args.source) and not args.source.startswith("https://"):
+        die("video URL must use HTTPS")
+
+    reference_specs = parse_variate_reference_specs(args.references)
+    existing_ids = []
+    for value in args.tune_ids or []:
+        if not str(value).isdigit():
+            die(f"invalid tune id: {value}")
+        tune_id = int(value)
+        if tune_id not in existing_ids:
+            existing_ids.append(tune_id)
+    if not args.brief.strip() and not reference_specs and not existing_ids:
+        die("provide --brief, --reference, or --tune-id")
+
+    catalog = model_catalog(cfg)
+    video_models = catalog.get("video_models")
+    if video_models is not None and VARIATE_VIDEO_MODEL not in video_models:
+        die(f"{VARIATE_VIDEO_MODEL} is not available for this account")
+    default_tune_id = resolve_model(cfg, None)
+
+    local_values = ([] if remote_url(args.source) else [args.source]) + [
+        spec["source"] for spec in reference_specs if not remote_url(spec["source"])
+    ]
+    upload_records = iter(direct_upload_records(cfg, local_values))
+    source_record = None if remote_url(args.source) else next(upload_records)
+    reference_uploads = [
+        None if remote_url(spec["source"]) else next(upload_records)
+        for spec in reference_specs
+    ]
+    source_payload = (
+        {"file_url": args.source}
+        if remote_url(args.source)
+        else {"blob_signed_id": source_record["signed_id"]}
+    )
+    description = variate_description(args, cfg, source_payload)
+
+    references = [
+        {"id": tune_id, "created": False}
+        for tune_id in existing_ids
+    ]
+    references += [
+        create_variate_reference(args, cfg, default_tune_id, spec, upload_record)
+        for spec, upload_record in zip(reference_specs, reference_uploads)
+    ]
+    video_prompt = compose_variate_video_prompt(args, cfg, description, references)
+
+    prompt_payload = {
+        "text": "",
+        "tune_id": int(default_tune_id),
+        "video_model": VARIATE_VIDEO_MODEL,
+        "video_prompt": video_prompt,
+        "video_audio": True,
+        "input_video_url" if remote_url(args.source) else "input_video": (
+            args.source if remote_url(args.source) else source_record["signed_id"]
+        ),
+    }
+    if args.base_pack_id:
+        prompt_payload["base_pack_id"] = args.base_pack_id
+    if args.order_id:
+        prompt_payload["order_id"] = args.order_id
+    response = request(
+        cfg,
+        "POST",
+        "/prompts",
+        query=[("view", "board")],
+        json_body={"prompt": prompt_payload},
+        workspace=args.workspace,
+    )
+    prompt = response["prompt"]
+    if args.wait:
+        prompt = poll_prompt(cfg, default_tune_id, prompt["id"], workspace=args.workspace)
+    emit({
+        "description": description,
+        "references": references,
+        "video_prompt": video_prompt,
+        "prompt": prompt,
+    })
 
 
 def cmd_inspect_video(args, cfg):
@@ -1116,10 +1413,8 @@ def cmd_packs_run(args, cfg):
         form.append(field("tune[title]", args.title))
     if args.name:
         form.append(field("tune[name]", args.name))
-    for img in (args.image or []):
-        if not Path(img).is_file():
-            die(f"file not found: {img}")
-        form.append(field("tune[images][]", f"@{img}"))
+    for signed_id in direct_uploads(cfg, args.image or []):
+        form.append(field("tune[images][]", signed_id))
     for url in (args.image_url or []):
         form.append(field("tune[image_urls][]", url))
 
@@ -1513,6 +1808,8 @@ def cmd_download(args, cfg):
 # --------------------------------------------------------------------------
 def cmd_api(args, cfg):
     form = [tuple(item.split("=", 1)) for item in args.form or [] if "=" in item]
+    uploaded = iter(direct_uploads(cfg, [value[1:] for _, value in form if value.startswith("@")]))
+    form = [(key, next(uploaded) if value.startswith("@") else value) for key, value in form]
     query = [tuple(item.split("=", 1)) for item in args.query or [] if "=" in item]
     json_body = json.loads(args.data) if args.data else None
     result = request(cfg, args.method.upper(), args.path, query=query, form=form, json_body=json_body,
@@ -1645,7 +1942,7 @@ def build_parser():
     p = tunes.add_parser("create", parents=[ws_parent], help="create a tune / reference")
     p.add_argument("--title", required=True)
     p.add_argument("--name", required=True, help="subject class (man, woman, dress, shoes, pose, ...)")
-    p.add_argument("--model", default="gemini", help="base model (default: gemini)")
+    p.add_argument("--model", default=None, help=image_model_help(models_record, "base model for the reference"))
     p.add_argument("--model-type", default="faceid")
     p.add_argument("--description", help="short description (stored in characteristics)")
     p.add_argument("--image-url", action="append", help="training image URL (repeatable)")
@@ -1786,6 +2083,31 @@ def build_parser():
     p.add_argument("--wait", action="store_true")
     p.set_defaults(func=cmd_video)
 
+    p = sub.add_parser(
+        "variate", parents=[ws_parent],
+        help="edit a source video while preserving its timing and performance",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  astria variate ./source.mp4 --brief 'Change the end card to Astria' --wait\n"
+            "  astria variate ./source.mp4 --reference ./dress.jpg --reference woman=./model.jpg --wait\n"
+            "  astria variate https://example.com/source.mp4 --tune-id 123 --brief 'Replace the presenter'"
+        ),
+    )
+    p.add_argument("source", help="local MP4/MOV file or public HTTPS video URL")
+    p.add_argument("--brief", default="", help="requested edit; optional when references are supplied")
+    p.add_argument("--tune-id", dest="tune_ids", action="append", metavar="ID",
+                   help="existing replacement reference (repeatable)")
+    p.add_argument("--reference", dest="references", action="append", metavar="[NAME=]PATH_OR_URL",
+                   help="create a replacement reference; omit NAME to auto-detect it (repeatable)")
+    description = p.add_mutually_exclusive_group()
+    description.add_argument("--description", help="source-video description; skips video inspection")
+    description.add_argument("--description-file", help="read source-video description from a UTF-8 file")
+    p.add_argument("--base-pack-id", type=int, help="bind the result as a pack one-off")
+    p.add_argument("--order-id", type=int, help="associate the result with an accessible order")
+    p.add_argument("--wait", action="store_true", help="block until the generated video is ready")
+    p.set_defaults(func=cmd_variate)
+
     p = sub.add_parser("inspect-video", parents=[ws_parent],
                        help="describe a video as timestamped text-to-video prompt text")
     p.add_argument("source", help="local video file or public HTTPS URL")
@@ -1917,7 +2239,8 @@ def build_parser():
     p.add_argument("method", help="GET / POST / PATCH / DELETE")
     p.add_argument("path", help="API path, e.g. /tunes?limit=5")
     p.add_argument("--query", action="append", help="query param k=v (repeatable)")
-    p.add_argument("--form", action="append", help="multipart field k=v (repeatable; v may be @file)")
+    p.add_argument("--form", action="append",
+                   help="form field k=v (repeatable; @file values are direct-uploaded first)")
     p.add_argument("--data", help="raw JSON request body")
     p.set_defaults(func=cmd_api)
 

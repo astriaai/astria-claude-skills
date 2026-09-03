@@ -53,7 +53,7 @@ needs nothing extra.
 
 | Skill | What it does |
 |-------|--------------|
-| **astria-api** | The `astria` CLI reference — tunes, prompts, packs, generate, video |
+| **astria-api** | The `astria` CLI reference — tunes, prompts, packs, generate, video, variate |
 | **prompt-writing** | Prompt syntax, parameters, and writing effective prompts |
 | **packs-guide** | Pack templates, categories, and photoshoot workflows |
 | **unique-headshot** | Generate diverse, realistic headshots with no reference |
@@ -81,6 +81,8 @@ astria video --video-model seedance2_fast_720p \
 astria video --video-model seedance2_fast_720p \
   --video-prompt "transition through these looks in order" \
   --image-reference ./look-1.jpg --image-reference ./look-2.jpg
+astria variate ./source.mp4 --reference ./dress.jpg \
+  --brief "Keep the performance and replace the wardrobe" --wait
 astria packs list
 astria api GET /prompts --query limit=5   # raw escape hatch
 ```
