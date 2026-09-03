@@ -5,15 +5,15 @@
     "url": "https://www.astria.ai"
   },
   "metadata": {
-    "description": "Skills and a CLI for the Astria API — AI image/video generation and inspection, fine-tuning, prompt writing and packs.",
-    "version": "1.4.5"
+    "description": "Skills and a CLI for Astria generation, prompt writing, packs, and agent handoff.",
+    "version": "1.5.0"
   },
   "plugins": [
     {
       "name": "astria",
       "source": "./",
-      "description": "Generate and inspect images and video, manage references (tunes) and packs, and write prompts with the Astria API. Bundles the `astria` CLI so no environment variables are needed — run `astria login` once.",
-      "version": "1.4.5",
+      "description": "Generate and inspect images and video, manage references and packs, and hand agent sessions into Astria. Bundles the `astria` CLI — run `astria login` once.",
+      "version": "1.5.0",
       "category": "creative",
       "author": {
         "name": "Astria",

@@ -29,10 +29,11 @@ import subprocess
 import sys
 import threading
 import time
+import webbrowser
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.18.1"
+VERSION = "1.19.0"
 
 
 def _platform_token():
@@ -610,6 +611,22 @@ def direct_uploads(cfg, values):
 def direct_upload_records(cfg, values):
     """Direct-upload local files in parallel and retain signed ids + public URLs."""
     return parallel_direct_upload(cfg, values, perform_direct_upload_record)
+
+
+def direct_upload_handoff_records(cfg, paths):
+    """Upload bounded handoff files; opaque skill assets travel as text/plain."""
+    prepared = []
+    for path in paths:
+        size = path.stat().st_size
+        content_type = file_content_type(path)
+        if content_type != "text/plain" and not content_type.startswith(DIRECT_UPLOAD_CONTENT_TYPE_PREFIXES):
+            content_type = "text/plain"
+        prepared.append((path, size, content_type))
+    if not prepared:
+        return []
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(DIRECT_UPLOAD_WORKERS, len(prepared))) as executor:
+        return list(executor.map(lambda item: perform_direct_upload_record(cfg, item), prepared))
 
 
 def resolve_media_values(cfg, values):
@@ -1463,6 +1480,133 @@ def cmd_workspaces_create(args, cfg):
 
 
 # --------------------------------------------------------------------------
+# commands — external agent handoff
+# --------------------------------------------------------------------------
+HANDOFF_MAX_MARKDOWN_BYTES = 256 * 1024
+HANDOFF_MAX_FILE_BYTES = 10 * 1024 * 1024
+HANDOFF_MAX_TOTAL_BYTES = 25 * 1024 * 1024
+HANDOFF_MAX_FILES = 50
+HANDOFF_SECRET_NAMES = {
+    ".env", ".git", ".ssh", ".aws", "credentials.json", "id_rsa", "id_ed25519",
+}
+
+
+def handoff_source():
+    client = (_client_token() or "").lower()
+    if "claude" in client:
+        return "claude-code"
+    if "chatgpt" in client or "codex" in client:
+        return "chatgpt"
+    if os.environ.get("CODEX_HOME"):
+        return "chatgpt"
+    if "cursor" in client:
+        return "cursor"
+    return "other"
+
+
+def handoff_sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def safe_bundle_segment(value):
+    cleaned = re.sub(r"[^A-Za-z0-9._ -]", "_", value).strip(" .")
+    return cleaned or "file"
+
+
+def validate_handoff_source(path):
+    if path.is_symlink():
+        die(f"handoff paths may not be symlinks: {path}")
+    lowered = {part.lower() for part in path.parts}
+    if lowered & HANDOFF_SECRET_NAMES or any(part.startswith(".env.") for part in lowered):
+        die(f"refusing to upload likely credential material: {path}")
+
+
+def collect_handoff_path(value, bundle_root, kind, require_skill=False):
+    root = Path(value).expanduser()
+    if not root.exists():
+        die(f"handoff path not found: {value}")
+    validate_handoff_source(root)
+    if require_skill and (not root.is_dir() or not (root / "SKILL.md").is_file()):
+        die(f"skill directory must contain SKILL.md: {value}")
+
+    paths = [root] if root.is_file() else sorted(path for path in root.rglob("*") if path.is_file())
+    records = []
+    for path in paths:
+        validate_handoff_source(path)
+        relative = Path(path.name) if root.is_file() else path.relative_to(root)
+        destination = Path(bundle_root)
+        if root.is_dir():
+            destination /= safe_bundle_segment(root.name)
+        destination /= Path(*(safe_bundle_segment(part) for part in relative.parts))
+        records.append({
+            "local_path": path,
+            "path": destination.as_posix(),
+            "kind": kind,
+        })
+    return records
+
+
+def cmd_agent_handoff(args, cfg):
+    workspace = resolve_workspace(cfg, args.workspace)
+    if not workspace or workspace == "all":
+        die("a workspace is required — pass --workspace or set WORKSPACE_ID")
+
+    handoff_path = Path(args.handoff).expanduser()
+    if not handoff_path.is_file():
+        die(f"handoff file not found: {args.handoff}")
+    validate_handoff_source(handoff_path)
+    handoff_bytes = handoff_path.read_bytes()
+    if len(handoff_bytes) > HANDOFF_MAX_MARKDOWN_BYTES:
+        die("handoff markdown must be at most 256 KB")
+    try:
+        handoff_markdown = handoff_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        die("handoff markdown must be UTF-8 text")
+
+    records = [
+        record
+        for value in (args.attach or [])
+        for record in collect_handoff_path(value, "files", "attachment")
+    ] + [
+        record
+        for value in (args.skill or [])
+        for record in collect_handoff_path(value, "skills", "skill", require_skill=True)
+    ]
+    if len(records) > HANDOFF_MAX_FILES:
+        die(f"a handoff may contain at most {HANDOFF_MAX_FILES} files")
+    if len({record["path"] for record in records}) != len(records):
+        die("two handoff files resolve to the same bundle path")
+    for record in records:
+        if record["local_path"].stat().st_size > HANDOFF_MAX_FILE_BYTES:
+            die(f"handoff file must be at most 10 MB: {record['local_path']}")
+    if sum(record["local_path"].stat().st_size for record in records) > HANDOFF_MAX_TOTAL_BYTES:
+        die("handoff files must total at most 25 MB")
+
+    uploads = direct_upload_handoff_records(cfg, [record["local_path"] for record in records])
+    files = [{
+        "path": record["path"],
+        "kind": record["kind"],
+        "signed_id": upload["signed_id"],
+        "sha256": handoff_sha256(record["local_path"]),
+        "executable": os.access(record["local_path"], os.X_OK),
+    } for record, upload in zip(records, uploads)]
+    result = request(cfg, "POST", "/api/agent_handoffs", json_body={"agent_handoff": {
+        "workspace_id": workspace,
+        "source": args.source or handoff_source(),
+        "title": args.title or handoff_path.stem.replace("_", " ").replace("-", " ").title() or "Agent handoff",
+        "handoff_markdown": handoff_markdown,
+        "files": files,
+    }}, workspace=workspace)
+    emit(result)
+    if args.open:
+        webbrowser.open(result["deep_link"])
+
+
+# --------------------------------------------------------------------------
 # commands — workspace landing page
 # --------------------------------------------------------------------------
 def cmd_landing_get(args, cfg):
@@ -2200,6 +2344,17 @@ def build_parser():
     wc = workspaces.add_parser("create", help="create a workspace")
     wc.add_argument("--title", required=True)
     wc.set_defaults(func=cmd_workspaces_create)
+
+    # agent handoff
+    agent = sub.add_parser("agent", help="Astria embedded agent").add_subparsers(dest="sub", required=True)
+    p = agent.add_parser("handoff", parents=[ws_parent], help="hand work from another agent into Astria")
+    p.add_argument("--handoff", required=True, metavar="HANDOFF.md", help="UTF-8 handoff summary")
+    p.add_argument("--attach", action="append", metavar="PATH", help="attach a file or directory (repeatable)")
+    p.add_argument("--skill", action="append", metavar="DIR", help="include a skill directory containing SKILL.md (repeatable)")
+    p.add_argument("--source", choices=["chatgpt", "claude-code", "claude-desktop", "cursor", "other"])
+    p.add_argument("--title", help="title for the imported Astria chat")
+    p.add_argument("--open", action="store_true", help="open the Astria deep link after upload")
+    p.set_defaults(func=cmd_agent_handoff)
 
     # landing page
     landing = sub.add_parser("landing", help="workspace landing page").add_subparsers(dest="sub", required=True)

@@ -1,6 +1,6 @@
 ---
 name: astria-api
-description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), inspecting or variating videos, or estimating generation and pack pricing. The reference for the `astria` CLI.
+description: Use when making API calls to Astria for tunes, prompts, packs, image/video generation (Gemini/Seedream), inspecting or variating videos, handing an external agent session into Astria, or estimating generation and pack pricing. The reference for the `astria` CLI.
 allowed-tools: Bash(astria:*)
 ---
 
@@ -458,6 +458,32 @@ astria workspaces create --title "Acme Store"   # new workspace → returns its 
 astria landing get -w 42                        # workspace JSON incl. landing_page_html
 astria landing set -w 42 --html-file ./edited.html
 ```
+
+## Hand work into Astria’s embedded agent
+
+When the user asks to continue the current ChatGPT, Codex, Claude, or Cursor
+session in Astria, write a concise UTF-8 `HANDOFF.md` containing the objective,
+completed work, important decisions, artifact paths, unresolved issues, and the
+recommended next action. Do not include credentials or hidden reasoning.
+
+Attach only files needed to continue. Include a custom skill only when it was
+actually used or is needed for the remaining work; never export credential
+files or an entire agent configuration directory.
+
+```bash
+astria agent handoff -w 42 \
+  --handoff ./HANDOFF.md \
+  --attach ./deliverables \
+  --skill ~/.claude/skills/relevant-skill \
+  --source claude-code \
+  --open
+```
+
+`--attach` and `--skill` are repeatable. A skill path must be a directory with
+`SKILL.md`. The command uploads the versioned bundle, creates a dedicated chat
+session, prints its HTTPS deep link, and opens it with `--open`. Imported skills
+are reviewable session-scoped references; Astria does not silently install them
+into the shared workspace skill directory.
 
 ## Cache (local snapshot + query layer)
 
