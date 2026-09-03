@@ -88,6 +88,9 @@ astria api GET /prompts --query limit=5   # raw escape hatch
 ```
 
 Run `astria --help`, or see the **astria-api** skill for the full reference.
+`astria help` is equivalent, including command paths such as
+`astria help variate`; use `astria -v`, `astria --version`, or
+`astria version` for the installed version.
 
 Credentials resolve from environment variables first (`ASTRIA_API_KEY` /
 `ASTRIA_AUTH_TOKEN`, …), then `~/.astria/config.json`. Scope any command to a

@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlparse
 
-VERSION = "1.18.0"
+VERSION = "1.18.1"
 
 
 def _platform_token():
@@ -126,6 +126,29 @@ def argv_profile():
         if token.startswith("--profile="):
             return token.split("=", 1)[1]
     return None
+
+
+def normalize_meta_argv(argv):
+    """Support command-style help/version aliases before argparse requires a verb."""
+    command_index = 0
+    while command_index < len(argv):
+        token = argv[command_index]
+        if token == "--profile":
+            command_index += 2
+            continue
+        if token.startswith("--profile="):
+            command_index += 1
+            continue
+        break
+
+    if command_index >= len(argv):
+        return argv
+    command = argv[command_index]
+    if command == "help":
+        return argv[:command_index] + argv[command_index + 1:] + ["--help"]
+    if command == "version" and command_index == len(argv) - 1:
+        return argv[:command_index] + ["--version"]
+    return argv
 
 
 def apply_profile(profile):
@@ -1892,7 +1915,7 @@ def build_parser():
     parser = argparse.ArgumentParser(prog="astria", description="Astria API command-line client.")
     parser.add_argument("--profile", metavar="NAME",
                         help="config profile to use (also ASTRIA_PROFILE env); default: 'default'")
-    parser.add_argument("--version", action="version", version=f"astria {VERSION}")
+    parser.add_argument("-v", "--version", action="version", version=f"astria {VERSION}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # shared --workspace for API commands
@@ -2255,6 +2278,7 @@ def main():
     # Resolve the profile up front so build_parser() reads that profile's
     # cached model catalog for the --help enum text; re-resolve from the
     # parsed args afterwards so the flag stays authoritative.
+    sys.argv[1:] = normalize_meta_argv(sys.argv[1:])
     apply_profile(resolve_profile(argv_profile()))
     args = build_parser().parse_args()
     apply_profile(resolve_profile(args.profile))
