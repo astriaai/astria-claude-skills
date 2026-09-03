@@ -21,10 +21,23 @@ Close-up studio headshot of a [age]-year-old [ethnicity/heritage] [gender] with 
 - Always specify exact age (e.g., "22-year-old")
 
 ### Ethnicity / Heritage
-Describe specific ethnic background for realistic facial feature guidance. Mix heritage for uniqueness:
-- Single origin: "Ethiopian", "Korean", "Irish", "Scandinavian", "Filipina"
-- Hyphenated heritage: "Russian-Ashkenazi", "Ethiopian-Israeli", "Yemenite-Moroccan", "Brazilian-Japanese", "Maori-Polynesian"
-- Regional descent: "of Eastern European descent", "of West African descent"
+Describe a specific heritage because it guides realistic facial features — it is a
+casting choice, never a default. Rules:
+- **Derive it from what is asked or seen.** When the brief comes from a brand's own
+  photos, read the heritage off the visible skin tone, hair and features. Never infer
+  it from the brand's country, language, store name or currency: an Israeli shoe store,
+  a French label or a Japanese marketplace does not make its models Israeli, French or
+  Japanese.
+- **No house default.** With no visual or written cue, spread a batch across regions
+  (East Asia, South Asia, Southeast Asia, West/East/Southern Africa, North Africa and
+  the Middle East, Northern/Southern/Eastern Europe, Latin America, Indigenous and
+  mixed heritage) and never repeat a region within the batch.
+- Single origin: "Nigerian", "Korean", "Irish", "Mexican", "Filipina", "Norwegian",
+  "Egyptian", "Peruvian", "Punjabi", "Vietnamese"
+- Hyphenated heritage: "Brazilian-Japanese", "Ghanaian-British", "Lebanese-Italian",
+  "Maori-Polynesian", "Colombian-Korean", "Turkish-German", "Somali-Swedish"
+- Regional descent: "of Eastern European descent", "of West African descent",
+  "of Andean descent", "of Han Chinese descent"
 
 ### Skin
 Always pair a **tone** with a **texture/detail**:
@@ -102,7 +115,8 @@ Vary lighting for natural diversity:
 1. **No reference tunes** — these prompts generate entirely new faces (no `<faceid:...>` tokens)
 2. **Always generate with Recraft V4.1**: `astria generate --model recraft-4-1 --text "..."` — its detailed skin rendering suits beauty headshots
 3. **Default parameters**: `--num-images 2 --aspect-ratio 1:1` (Recraft has no `--resolution` — that flag is Gemini-only)
-4. **Never repeat the same ethnicity/heritage** in a batch
+4. **Never repeat the same ethnicity/heritage** in a batch, and never lean on one
+   region across batches — check your last few prompts and move on
 5. **Every prompt must have at least one unique distinguishing feature** (scar, dimple, beauty mark, asymmetry, etc.)
 6. **Hair is always pulled back** — no hair framing or covering the face
 7. **Fixed suffix**: `Bare shoulders, no clothing visible, no jewelry. [expression], looking at the camera. Clean white background #fff, [lighting], natural realistic skin detail, beauty headshot`
@@ -126,7 +140,10 @@ Close-up studio headshot of a 25-year-old Irish woman with cool-toned fair skin,
 Close-up studio headshot of a 22-year-old Ethiopian woman with warm umber skin, large expressive round eyes, narrow bridge nose, defined cupid's bow, long neck, dark hair pulled into a smooth high ballerina bun. Bare shoulders, no clothing visible, no jewelry. Soft parted lips, steady gaze, looking at the camera. Clean white background #fff, even soft studio lighting, realistic skin texture with natural sheen, beauty headshot
 
 **Prompt 3:**
-Close-up studio headshot of an 18-year-old Israeli woman of Russian-Ashkenazi descent, very pale porcelain skin with a pink flush on the cheeks, deep-set steel-blue eyes beneath a heavy brow bone, a long narrow nose that turns slightly downward at the tip, wide thin lips, sharp cheekbones casting slight shadows, a dusting of childhood freckles across the nose bridge only, sandy-blonde fine hair brushed back flat behind the ears into a low knot. Bare shoulders, no clothing visible, no jewelry. Poised neutral expression, looking at the camera. Clean white background #fff, soft ring light, natural realistic skin detail, beauty headshot
+Close-up studio headshot of a 27-year-old Mexican woman of Zapotec descent with warm caramel skin and visible pores, wide-set dark brown almond eyes with thick lashes, a strong straight nose, an oval face with high rounded cheekbones and a small rounded chin, a pronounced dimple on the left cheek only, glossy black hair swept back into a sleek twisted bun at the nape. Bare shoulders, no clothing visible, no jewelry. Poised neutral expression, looking at the camera. Clean white background #fff, soft ring light, natural realistic skin detail, beauty headshot
 
 **Prompt 4:**
 Close-up studio headshot of a 24-year-old Korean woman with pale milky skin, small monolid eyes, round face, soft jawline, subtle freckles on nose bridge, straight black hair pulled back into a sleek tight ponytail. Bare shoulders, no clothing visible, no jewelry. Slight closed-mouth smile, looking at the camera. Clean white background #fff, flat diffused studio lighting, realistic pore detail, natural skin, beauty headshot
+
+**Prompt 5:**
+Close-up studio headshot of a 31-year-old Norwegian man with cool-toned fair skin and light stubble, hooded blue-grey eyes with pale lashes, a prominent Roman nose with a defined bridge bump, an angular face with a strong square jaw, a faint scar across the left eyebrow, ash-blonde hair brushed back flat. Bare shoulders, no clothing visible, no jewelry. Calm direct gaze, looking at the camera. Clean white background #fff, soft butterfly lighting, natural realistic skin detail, beauty headshot
