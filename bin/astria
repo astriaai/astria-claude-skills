@@ -1262,6 +1262,35 @@ def compose_variate_video_prompt(args, cfg, description, references):
             if missing_tokens else video_prompt)
 
 
+INSPECT_TIMEOUT_SEC = 240
+INSPECT_INTERVAL_SEC = 2
+
+
+def inspect_video(cfg, payload, workspace=None):
+    """POST /videos/inspect only enqueues the inspection (download, ffmpeg and
+    Gemini run on Astria's worker); poll GET /videos/inspect/<id> until it
+    settles. Servers that still answer synchronously return `description`
+    straight away and skip the loop."""
+    record = request(cfg, "POST", "/videos/inspect", json_body=payload,
+                     workspace=workspace, timeout=125)
+    if not isinstance(record, dict):
+        raise AstriaError("unexpected response from POST /videos/inspect")
+    deadline = time.monotonic() + INSPECT_TIMEOUT_SEC
+    while record.get("status") in ("pending", "processing"):
+        if time.monotonic() > deadline:
+            raise AstriaError(f"video inspection {record.get('id')} did not finish within {INSPECT_TIMEOUT_SEC}s")
+        time.sleep(INSPECT_INTERVAL_SEC)
+        record = request(cfg, "GET", f"/videos/inspect/{record['id']}",
+                         workspace=workspace, timeout=30)
+        if not isinstance(record, dict):
+            raise AstriaError("unexpected response from GET /videos/inspect")
+    if record.get("status") == "failed":
+        raise AstriaError(f"video inspection failed: {record.get('error') or 'unknown error'}")
+    if not str(record.get("description") or "").strip():
+        raise AstriaError("video inspection returned no description")
+    return record
+
+
 def variate_description(args, cfg, source_payload):
     if args.description is not None:
         description = args.description.strip()
@@ -1271,14 +1300,7 @@ def variate_description(args, cfg, source_payload):
             die(f"file not found: {args.description_file}")
         description = path.read_text(encoding="utf-8").strip()
     else:
-        inspected = request(
-            cfg,
-            "POST",
-            "/videos/inspect",
-            json_body=source_payload,
-            workspace=args.workspace,
-            timeout=125,
-        )
+        inspected = inspect_video(cfg, source_payload, workspace=args.workspace)
         description = inspected["description"].strip()
     if not description:
         die("video description cannot be empty")
@@ -1374,8 +1396,7 @@ def cmd_inspect_video(args, cfg):
         payload = {"blob_signed_id": direct_upload(cfg, args.source)}
     if args.tune_id:
         payload["tune_ids"] = [int(tune_id) for tune_id in args.tune_id]
-    emit(request(cfg, "POST", "/videos/inspect", json_body=payload,
-                 workspace=args.workspace, timeout=125))
+    emit(inspect_video(cfg, payload, workspace=args.workspace))
 
 
 # --------------------------------------------------------------------------
